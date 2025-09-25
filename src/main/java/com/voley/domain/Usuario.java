@@ -3,6 +3,8 @@ package com.voley.domain;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "usuarios")
@@ -56,6 +58,10 @@ public class Usuario {
     
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+    
+    // Relación con Pagos
+    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<Pago> pagos = new ArrayList<>();
     
     // Constructores
     public Usuario() {}
@@ -136,6 +142,23 @@ public class Usuario {
     
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    
+    // Métodos para manejar pagos
+    public List<Pago> getPagos() { return pagos; }
+    public void setPagos(List<Pago> pagos) { this.pagos = pagos; }
+    
+    public void agregarPago(Pago pago) {
+        pagos.add(pago);
+        pago.setUsuario(this);
+    }
+    
+    public String getNombreCompleto() {
+        return nombres + " " + apellidos;
+    }
+    
+    public boolean estaActivo() {
+        return EstadoUsuario.Activo.equals(this.estado);
+    }
     
     // Enums
     public enum Genero {

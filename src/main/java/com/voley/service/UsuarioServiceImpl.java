@@ -3,6 +3,7 @@ package com.voley.service;
 import com.voley.domain.Usuario;
 import com.voley.repository.UsuarioRepositoryPort;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -15,10 +16,12 @@ import java.util.Optional;
 public class UsuarioServiceImpl implements UsuarioService {
     
     private final UsuarioRepositoryPort usuarioRepository;
+    private final PagoService pagoService;
     
     @Autowired
-    public UsuarioServiceImpl(UsuarioRepositoryPort usuarioRepository) {
+    public UsuarioServiceImpl(UsuarioRepositoryPort usuarioRepository, @Lazy PagoService pagoService) {
         this.usuarioRepository = usuarioRepository;
+        this.pagoService = pagoService;
     }
     
     @Override
@@ -33,7 +36,19 @@ public class UsuarioServiceImpl implements UsuarioService {
             throw new IllegalArgumentException("Ya existe un usuario con el email: " + usuario.getEmail());
         }
         
-        return usuarioRepository.save(usuario);
+        // Guardar el usuario
+        Usuario usuarioGuardado = usuarioRepository.save(usuario);
+        
+        // Generar pagos automáticamente para el nuevo usuario
+        try {
+            pagoService.generarPagosParaNuevoUsuario(usuarioGuardado);
+        } catch (Exception e) {
+            // Log del error pero no fallar la creación del usuario
+            System.err.println("Error generando pagos para el nuevo usuario: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return usuarioGuardado;
     }
     
     @Override
