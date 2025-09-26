@@ -39,9 +39,55 @@ public class PagoServiceImpl implements PagoService {
     
     @Override
     public Pago crearPago(Pago pago) {
+        logger.debug("💰 Creando pago manual: usuarioId={}, monto={}, estado={}", 
+                    pago.getUsuario() != null ? pago.getUsuario().getId() : "null",
+                    pago.getMonto(), pago.getEstado());
+        
+        // Validaciones obligatorias
+        if (pago.getUsuario() == null) {
+            throw new IllegalArgumentException("El usuario es obligatorio");
+        }
+        if (pago.getPeriodoMes() == null || pago.getPeriodoAnio() == null) {
+            throw new IllegalArgumentException("El período (mes y año) es obligatorio");
+        }
+        if (pago.getMonto() == null) {
+            throw new IllegalArgumentException("El monto es obligatorio");
+        }
+        if (pago.getEstado() == null) {
+            throw new IllegalArgumentException("El estado es obligatorio");
+        }
+        if (pago.getMetodoPago() == null || pago.getMetodoPago().trim().isEmpty()) {
+            throw new IllegalArgumentException("El método de pago es obligatorio");
+        }
+        
+        // Establecer valores automáticos
         if (pago.getFechaRegistro() == null) {
             pago.setFechaRegistro(LocalDate.now());
         }
+        
+        // Generar fecha de vencimiento automáticamente
+        if (pago.getFechaVencimiento() == null) {
+            LocalDate fechaPeriodo = LocalDate.of(pago.getPeriodoAnio(), pago.getPeriodoMes(), 1);
+            pago.setFechaVencimiento(calcularFechaVencimiento(fechaPeriodo));
+        }
+        
+        // Si el estado es "pagado", establecer fecha_pago automáticamente
+        if (Pago.EstadoPago.pagado.equals(pago.getEstado())) {
+            if (pago.getFechaPago() == null) {
+                pago.setFechaPago(LocalDate.now());
+            }
+            logger.debug("✅ Pago marcado como pagado con fecha: {}", pago.getFechaPago());
+        }
+        
+        // Establecer nombre del usuario automáticamente
+        if (pago.getUsuarioNombre() == null || pago.getUsuarioNombre().trim().isEmpty()) {
+            pago.setUsuarioNombre(pago.getUsuario().getNombreCompleto());
+        }
+        
+        logger.debug("📋 Guardando pago: periodo={}/{}, vencimiento={}, estado={}, metodoPago={}", 
+                    pago.getPeriodoMes(), pago.getPeriodoAnio(), pago.getFechaVencimiento(),
+                    pago.getEstado(), pago.getMetodoPago());
+        
         return pagoRepository.save(pago);
     }
     
@@ -341,5 +387,28 @@ public class PagoServiceImpl implements PagoService {
     @Transactional(readOnly = true)
     public List<Pago> obtenerTodosLosPagos() {
         return pagoRepository.findAll();
+    }
+    
+    @Override
+    public Pago actualizarPago(Pago pago) {
+        logger.debug("🔄 Actualizando pago: id={}, estado={}", pago.getId(), pago.getEstado());
+        
+        if (pago.getId() == null) {
+            throw new IllegalArgumentException("El ID del pago es obligatorio para actualizar");
+        }
+        
+        // Verificar que el pago existe
+        Optional<Pago> pagoExistente = pagoRepository.findById(pago.getId());
+        if (!pagoExistente.isPresent()) {
+            throw new IllegalArgumentException("Pago no encontrado con ID: " + pago.getId());
+        }
+        
+        // Establecer fecha de actualización
+        pago.setUpdatedAt(java.time.LocalDateTime.now());
+        
+        Pago pagoActualizado = pagoRepository.save(pago);
+        logger.debug("✅ Pago actualizado exitosamente: id={}, estado={}", pagoActualizado.getId(), pagoActualizado.getEstado());
+        
+        return pagoActualizado;
     }
 }

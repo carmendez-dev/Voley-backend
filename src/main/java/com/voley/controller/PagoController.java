@@ -3,6 +3,7 @@ package com.voley.controller;
 import com.voley.domain.Pago;
 import com.voley.domain.Usuario;
 import com.voley.dto.PagoResumenDTO;
+import com.voley.dto.PagosPorUsuarioDTO;
 import com.voley.service.PagoService;
 import com.voley.service.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,12 +37,92 @@ public class PagoController {
      * Crear un nuevo pago manualmente
      */
     @PostMapping
-    public ResponseEntity<Pago> crearPago(@RequestBody Pago pago) {
+    public ResponseEntity<?> crearPago(@RequestBody Map<String, Object> pagoData) {
         try {
+            // Validar campos obligatorios
+            if (!pagoData.containsKey("usuario_id") || pagoData.get("usuario_id") == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "El usuario_id es obligatorio"));
+            }
+            if (!pagoData.containsKey("periodo_mes") || pagoData.get("periodo_mes") == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "El periodo_mes es obligatorio"));
+            }
+            if (!pagoData.containsKey("periodo_anio") || pagoData.get("periodo_anio") == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "El periodo_anio es obligatorio"));
+            }
+            if (!pagoData.containsKey("monto") || pagoData.get("monto") == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "El monto es obligatorio"));
+            }
+            if (!pagoData.containsKey("estado") || pagoData.get("estado") == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "El estado es obligatorio"));
+            }
+            if (!pagoData.containsKey("metodo_pago") || pagoData.get("metodo_pago") == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "El metodo_pago es obligatorio"));
+            }
+            
+            // Obtener usuario
+            Long usuarioId = Long.valueOf(pagoData.get("usuario_id").toString());
+            Optional<Usuario> usuarioOpt = usuarioService.obtenerUsuarioPorId(usuarioId);
+            if (!usuarioOpt.isPresent()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Usuario no encontrado"));
+            }
+            
+            // Validar estado
+            String estadoStr = pagoData.get("estado").toString().toLowerCase();
+            Pago.EstadoPago estado;
+            try {
+                estado = Pago.EstadoPago.valueOf(estadoStr);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Estado inválido. Debe ser: pendiente, pagado, atraso, o rechazado"));
+            }
+            
+            // Crear objeto Pago
+            Pago pago = new Pago();
+            pago.setUsuario(usuarioOpt.get());
+            pago.setPeriodoMes(Integer.valueOf(pagoData.get("periodo_mes").toString()));
+            pago.setPeriodoAnio(Integer.valueOf(pagoData.get("periodo_anio").toString()));
+            pago.setMonto(new java.math.BigDecimal(pagoData.get("monto").toString()));
+            pago.setEstado(estado);
+            pago.setMetodoPago(pagoData.get("metodo_pago").toString());
+            
+            // Campos opcionales
+            if (pagoData.containsKey("comprobante") && pagoData.get("comprobante") != null) {
+                pago.setComprobante(pagoData.get("comprobante").toString());
+            }
+            if (pagoData.containsKey("observaciones") && pagoData.get("observaciones") != null) {
+                pago.setObservaciones(pagoData.get("observaciones").toString());
+            }
+            
+            // Crear el pago (el service se encarga de fecha_registro, created_at, updated_at, fecha_vencimiento, y fecha_pago si es pagado)
             Pago nuevoPago = pagoService.crearPago(pago);
-            return ResponseEntity.status(HttpStatus.CREATED).body(nuevoPago);
+            
+            // Preparar respuesta con mensaje de éxito y información del usuario
+            Map<String, Object> respuesta = new java.util.HashMap<>();
+            respuesta.put("mensaje", "Pago creado exitosamente");
+            
+            // Información del usuario (sin referencias circulares)
+            Map<String, Object> usuarioInfo = new java.util.HashMap<>();
+            usuarioInfo.put("id", usuarioOpt.get().getId());
+            usuarioInfo.put("nombreCompleto", usuarioOpt.get().getNombreCompleto());
+            usuarioInfo.put("email", usuarioOpt.get().getEmail() != null ? usuarioOpt.get().getEmail() : "No registrado");
+            respuesta.put("usuario", usuarioInfo);
+            
+            // Información básica del pago (sin referencias al usuario)
+            Map<String, Object> pagoInfo = new java.util.HashMap<>();
+            pagoInfo.put("id", nuevoPago.getId());
+            pagoInfo.put("periodo", formatearPeriodo(nuevoPago.getPeriodoMes(), nuevoPago.getPeriodoAnio()));
+            pagoInfo.put("monto", nuevoPago.getMonto().toString());
+            pagoInfo.put("estado", nuevoPago.getEstado().toString());
+            respuesta.put("pago", pagoInfo);
+            
+            return ResponseEntity.status(HttpStatus.CREATED).body(respuesta);
+            
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Formato numérico inválido: " + e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                               .body(Map.of("error", "Error interno del servidor: " + e.getMessage()));
         }
     }
     
@@ -53,6 +134,76 @@ public class PagoController {
         Optional<Pago> pago = pagoService.obtenerPagoPorId(id);
         return pago.map(ResponseEntity::ok)
                   .orElse(ResponseEntity.notFound().build());
+    }
+    
+    /**
+     * Modificar el estado de un pago
+     */
+    @PutMapping("/{id}/estado")
+    public ResponseEntity<Map<String, Object>> modificarEstadoPago(
+            @PathVariable Long id, 
+            @RequestBody Map<String, String> request) {
+        try {
+            // Validar que se proporcione el estado
+            if (!request.containsKey("estado") || request.get("estado") == null || request.get("estado").trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "El estado es requerido"));
+            }
+            
+            // Obtener el pago
+            Optional<Pago> pagoOpt = pagoService.obtenerPagoPorId(id);
+            if (!pagoOpt.isPresent()) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            Pago pago = pagoOpt.get();
+            
+            // Validar el nuevo estado
+            String nuevoEstadoStr = request.get("estado").toLowerCase();
+            Pago.EstadoPago nuevoEstado;
+            try {
+                nuevoEstado = Pago.EstadoPago.valueOf(nuevoEstadoStr);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Estado inválido. Debe ser: pendiente, pagado, atraso, o rechazado"));
+            }
+            
+            // Actualizar el estado
+            Pago.EstadoPago estadoAnterior = pago.getEstado();
+            pago.setEstado(nuevoEstado);
+            
+            // Lógica para manejar fecha_pago según el cambio de estado
+            if (nuevoEstado == Pago.EstadoPago.pagado && estadoAnterior != Pago.EstadoPago.pagado) {
+                // Si cambia a "pagado", establecer la fecha de pago
+                pago.setFechaPago(java.time.LocalDate.now());
+            } else if (estadoAnterior == Pago.EstadoPago.pagado && nuevoEstado != Pago.EstadoPago.pagado) {
+                // Si cambia de "pagado" a cualquier otro estado, eliminar la fecha de pago
+                pago.setFechaPago(null);
+            }
+            
+            // Guardar el pago actualizado
+            Pago pagoActualizado = pagoService.actualizarPago(pago);
+            
+            // Preparar respuesta exitosa
+            Map<String, Object> respuesta = new java.util.HashMap<>();
+            respuesta.put("mensaje", "Estado del pago actualizado exitosamente");
+            respuesta.put("pagoId", pagoActualizado.getId());
+            respuesta.put("estadoAnterior", estadoAnterior.toString());
+            respuesta.put("estadoNuevo", pagoActualizado.getEstado().toString());
+            respuesta.put("periodo", formatearPeriodo(pagoActualizado.getPeriodoMes(), pagoActualizado.getPeriodoAnio()));
+            respuesta.put("monto", pagoActualizado.getMonto().toString());
+            
+            // Información del usuario
+            Map<String, Object> usuarioInfo = new java.util.HashMap<>();
+            usuarioInfo.put("id", pagoActualizado.getUsuario().getId());
+            usuarioInfo.put("nombreCompleto", pagoActualizado.getUsuario().getNombreCompleto());
+            usuarioInfo.put("email", pagoActualizado.getUsuario().getEmail() != null ? pagoActualizado.getUsuario().getEmail() : "No registrado");
+            respuesta.put("usuario", usuarioInfo);
+            
+            return ResponseEntity.ok(respuesta);
+            
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                               .body(Map.of("error", "Error interno del servidor: " + e.getMessage()));
+        }
     }
     
     /**
@@ -77,16 +228,35 @@ public class PagoController {
     }
     
     /**
-     * Obtener pagos por usuario
+     * Obtener pagos por usuario con información detallada y organizada
      */
     @GetMapping("/usuario/{usuarioId}")
-    public ResponseEntity<List<Pago>> obtenerPagosPorUsuario(@PathVariable Long usuarioId) {
-        Optional<Usuario> usuario = usuarioService.obtenerUsuarioPorId(usuarioId);
-        if (usuario.isPresent()) {
-            List<Pago> pagos = pagoService.obtenerPagosPorUsuarioOrdenados(usuario.get());
-            return ResponseEntity.ok(pagos);
+    public ResponseEntity<PagosPorUsuarioDTO> obtenerPagosPorUsuario(@PathVariable Long usuarioId) {
+        try {
+            Optional<Usuario> usuario = usuarioService.obtenerUsuarioPorId(usuarioId);
+            if (usuario.isPresent()) {
+                List<Pago> pagos = pagoService.obtenerPagosPorUsuarioOrdenados(usuario.get());
+                
+                // Crear DTO con información del usuario
+                PagosPorUsuarioDTO.UsuarioInfoDTO usuarioInfo = new PagosPorUsuarioDTO.UsuarioInfoDTO();
+                usuarioInfo.setId(usuario.get().getId());
+                usuarioInfo.setNombreCompleto(usuario.get().getNombreCompleto());
+                usuarioInfo.setEmail(usuario.get().getEmail() != null ? usuario.get().getEmail() : "No registrado");
+                usuarioInfo.setCelular(usuario.get().getCelular() != null ? usuario.get().getCelular() : "No registrado");
+                usuarioInfo.setEstado(usuario.get().getEstado() != null ? usuario.get().getEstado().toString() : "No definido");
+                
+                // Crear DTO principal
+                PagosPorUsuarioDTO respuesta = new PagosPorUsuarioDTO();
+                respuesta.setUsuario(usuarioInfo);
+                respuesta.setResumen(calcularResumenPagos(pagos));
+                respuesta.setPagos(formatearPagosDetallados(pagos));
+                
+                return ResponseEntity.ok(respuesta);
+            }
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
-        return ResponseEntity.notFound().build();
     }
     
     /**
@@ -229,13 +399,55 @@ public class PagoController {
      * Eliminar un pago (solo si está pendiente)
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<String> eliminarPago(@PathVariable Long id) {
-        boolean eliminado = pagoService.eliminarPago(id);
-        if (eliminado) {
-            return ResponseEntity.ok("Pago eliminado exitosamente");
-        } else {
-            return ResponseEntity.badRequest()
-                               .body("No se puede eliminar el pago. Debe estar en estado PENDIENTE");
+    public ResponseEntity<Map<String, Object>> eliminarPago(@PathVariable Long id) {
+        try {
+            // Obtener el pago antes de eliminarlo para mostrar información
+            Optional<Pago> pagoOpt = pagoService.obtenerPagoPorId(id);
+            if (!pagoOpt.isPresent()) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            Pago pago = pagoOpt.get();
+            
+            // Verificar que el pago esté en estado PENDIENTE
+            if (pago.getEstado() != Pago.EstadoPago.pendiente) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Solo se pueden eliminar pagos en estado PENDIENTE",
+                    "estadoActual", pago.getEstado().toString(),
+                    "pagoId", pago.getId(),
+                    "periodo", formatearPeriodo(pago.getPeriodoMes(), pago.getPeriodoAnio())
+                ));
+            }
+            
+            // Intentar eliminar el pago
+            boolean eliminado = pagoService.eliminarPago(id);
+            
+            if (eliminado) {
+                // Preparar respuesta exitosa
+                Map<String, Object> respuesta = new java.util.HashMap<>();
+                respuesta.put("mensaje", "Pago eliminado exitosamente");
+                respuesta.put("pagoEliminado", Map.of(
+                    "id", pago.getId(),
+                    "periodo", formatearPeriodo(pago.getPeriodoMes(), pago.getPeriodoAnio()),
+                    "monto", pago.getMonto().toString(),
+                    "estado", pago.getEstado().toString()
+                ));
+                
+                // Información del usuario
+                Map<String, Object> usuarioInfo = new java.util.HashMap<>();
+                usuarioInfo.put("id", pago.getUsuario().getId());
+                usuarioInfo.put("nombreCompleto", pago.getUsuario().getNombreCompleto());
+                usuarioInfo.put("email", pago.getUsuario().getEmail() != null ? pago.getUsuario().getEmail() : "No registrado");
+                respuesta.put("usuario", usuarioInfo);
+                
+                return ResponseEntity.ok(respuesta);
+            } else {
+                return ResponseEntity.badRequest().body(Map.of("error", "No se pudo eliminar el pago"));
+            }
+            
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                               .body(Map.of("error", "Error interno del servidor: " + e.getMessage()));
         }
     }
     
@@ -362,5 +574,92 @@ public class PagoController {
             return ResponseEntity.ok(info);
         }
         return ResponseEntity.notFound().build();
+    }
+    
+    /**
+     * Calcular resumen de pagos de un usuario
+     */
+    private Map<String, Object> calcularResumenPagos(List<Pago> pagos) {
+        int totalPagos = pagos.size();
+        int pagosPendientes = (int) pagos.stream().filter(p -> p.getEstado() == Pago.EstadoPago.pendiente).count();
+        int pagosVencidos = (int) pagos.stream().filter(p -> p.getEstado() == Pago.EstadoPago.atraso).count();
+        int pagosPagados = (int) pagos.stream().filter(p -> p.getEstado() == Pago.EstadoPago.pagado).count();
+        int pagosRechazados = (int) pagos.stream().filter(p -> p.getEstado() == Pago.EstadoPago.rechazado).count();
+        
+        java.math.BigDecimal montoTotalPendiente = pagos.stream()
+            .filter(p -> p.getEstado() != Pago.EstadoPago.pagado)
+            .map(Pago::getMonto)
+            .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+            
+        java.math.BigDecimal montoTotalPagado = pagos.stream()
+            .filter(p -> p.getEstado() == Pago.EstadoPago.pagado)
+            .map(Pago::getMonto)
+            .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+        
+        return Map.of(
+            "totalPagos", totalPagos,
+            "pagosPendientes", pagosPendientes,
+            "pagosVencidos", pagosVencidos,
+            "pagosPagados", pagosPagados,
+            "pagosRechazados", pagosRechazados,
+            "montoTotalPendiente", montoTotalPendiente,
+            "montoTotalPagado", montoTotalPagado,
+            "porcentajePagado", totalPagos > 0 ? (pagosPagados * 100.0 / totalPagos) : 0.0
+        );
+    }
+    
+    /**
+     * Formatear pagos con información detallada
+     */
+    private List<PagosPorUsuarioDTO.PagoDetalleDTO> formatearPagosDetallados(List<Pago> pagos) {
+        return pagos.stream().map(pago -> {
+            LocalDate hoy = LocalDate.now();
+            int diasVencimiento = 0;
+            boolean estaVencido = false;
+            String estadoVencimiento = "A tiempo";
+            
+            if (pago.getFechaVencimiento() != null) {
+                diasVencimiento = (int) pago.getFechaVencimiento().until(hoy).getDays();
+                estaVencido = diasVencimiento > 0 && pago.getEstado() != Pago.EstadoPago.pagado;
+                
+                if (pago.getEstado() == Pago.EstadoPago.pagado) {
+                    estadoVencimiento = "Pagado";
+                } else if (diasVencimiento > 0) {
+                    estadoVencimiento = "Vencido (" + diasVencimiento + " días)";
+                } else if (diasVencimiento == 0) {
+                    estadoVencimiento = "Vence hoy";
+                } else {
+                    estadoVencimiento = "Faltan " + Math.abs(diasVencimiento) + " días";
+                }
+            }
+            
+            PagosPorUsuarioDTO.PagoDetalleDTO detalle = new PagosPorUsuarioDTO.PagoDetalleDTO();
+            detalle.setId(pago.getId());
+            detalle.setPeriodo(formatearPeriodo(pago.getPeriodoMes(), pago.getPeriodoAnio()));
+            detalle.setMonto(pago.getMonto());
+            detalle.setEstado(pago.getEstado().toString());
+            detalle.setFechaVencimiento(pago.getFechaVencimiento() != null ? 
+                pago.getFechaVencimiento().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "N/A");
+            detalle.setFechaPago(pago.getFechaPago() != null ? 
+                pago.getFechaPago().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) : null);
+            detalle.setMetodoPago(pago.getMetodoPago() != null ? pago.getMetodoPago() : "N/A");
+            detalle.setComprobante(pago.getComprobante() != null ? pago.getComprobante() : "N/A");
+            detalle.setObservaciones(pago.getObservaciones() != null ? pago.getObservaciones() : "N/A");
+            detalle.setVencido(estaVencido);
+            detalle.setDiasVencimiento(diasVencimiento);
+            detalle.setEstadoTexto(estadoVencimiento);
+            
+            return detalle;
+        }).collect(java.util.stream.Collectors.toList());
+    }
+    
+    /**
+     * Formatear período (mes/año) a texto legible
+     */
+    private String formatearPeriodo(Integer mes, Integer anio) {
+        if (mes == null || anio == null) return "N/A";
+        String[] meses = {"Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                         "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"};
+        return meses[mes - 1] + " " + anio;
     }
 }

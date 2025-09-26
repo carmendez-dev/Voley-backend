@@ -90,4 +90,9 @@ public interface PagoService {
      * Obtiene todos los pagos del sistema
      */
     List<Pago> obtenerTodosLosPagos();
+    
+    /**
+     * Actualiza un pago existente
+     */
+    Pago actualizarPago(Pago pago);
 }
