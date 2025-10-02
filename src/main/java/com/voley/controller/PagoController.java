@@ -1,5 +1,6 @@
 package com.voley.controller;
 
+import com.voley.application.pagos.EliminarPagoUseCase;
 import com.voley.domain.Pago;
 import com.voley.domain.Usuario;
 import com.voley.service.PagoService;
@@ -24,11 +25,13 @@ public class PagoController {
     
     private final PagoService pagoService;
     private final UsuarioService usuarioService;
+    private final EliminarPagoUseCase eliminarPagoUseCase;
     
     @Autowired
-    public PagoController(PagoService pagoService, UsuarioService usuarioService) {
+    public PagoController(PagoService pagoService, UsuarioService usuarioService, EliminarPagoUseCase eliminarPagoUseCase) {
         this.pagoService = pagoService;
         this.usuarioService = usuarioService;
+        this.eliminarPagoUseCase = eliminarPagoUseCase;
     }
     
     @GetMapping
@@ -307,6 +310,68 @@ public class PagoController {
             errorResponse.put("message", "Error al verificar pagos en atraso: " + e.getMessage());
             errorResponse.put("timestamp", LocalDate.now().toString());
             return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+    
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> eliminarPago(@PathVariable Long id) {
+        try {
+            logger.info("Eliminando pago con ID: {}", id);
+            
+            boolean eliminado = eliminarPagoUseCase.ejecutar(id);
+            
+            Map<String, Object> response = new HashMap<>();
+            
+            if (eliminado) {
+                response.put("success", true);
+                response.put("message", "Pago eliminado exitosamente");
+                response.put("timestamp", LocalDate.now().toString());
+                response.put("pagoId", id);
+                
+                logger.info("Pago eliminado exitosamente: {}", id);
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "No se pudo eliminar el pago");
+                response.put("timestamp", LocalDate.now().toString());
+                response.put("pagoId", id);
+                
+                logger.warn("No se pudo eliminar el pago: {}", id);
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+        } catch (IllegalArgumentException e) {
+            logger.error("Error de validación al eliminar pago {}: {}", id, e.getMessage());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            response.put("timestamp", LocalDate.now().toString());
+            response.put("pagoId", id);
+            
+            return ResponseEntity.badRequest().body(response);
+            
+        } catch (IllegalStateException e) {
+            logger.error("Error de estado al eliminar pago {}: {}", id, e.getMessage());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            response.put("timestamp", LocalDate.now().toString());
+            response.put("pagoId", id);
+            
+            return ResponseEntity.status(409).body(response); // 409 Conflict
+            
+        } catch (Exception e) {
+            logger.error("Error interno al eliminar pago {}: {}", id, e.getMessage());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "Error interno del servidor");
+            response.put("timestamp", LocalDate.now().toString());
+            response.put("pagoId", id);
+            
+            return ResponseEntity.status(500).body(response);
         }
     }
     
