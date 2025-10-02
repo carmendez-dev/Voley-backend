@@ -36,8 +36,9 @@ public interface PagoJpaRepository extends JpaRepository<Pago, Long> {
     
     /**
      * Encuentra pagos pendientes que deben pasar a atraso
+     * Solo cuando la fecha actual es posterior a la fecha de vencimiento
      */
-    @Query("SELECT p FROM Pago p WHERE p.estado = 'PENDIENTE' AND p.fechaRegistro < :fechaLimite")
+    @Query("SELECT p FROM Pago p WHERE p.estado = 'pendiente' AND p.fechaVencimiento < :fechaLimite")
     List<Pago> findPagosPendientesParaAtraso(@Param("fechaLimite") LocalDate fechaLimite);
     
     /**

@@ -298,34 +298,49 @@ public class PagoServiceImpl implements PagoService {
     @Override
     @Scheduled(cron = "0 0 12 * * ?") // Se ejecuta todos los días a las 12:00 PM
     public void actualizarPagosEnAtraso() {
-        logger.debug("Iniciando actualización de pagos en atraso");
+        logger.info("🔍 Iniciando verificación de pagos en atraso");
         
         LocalDate fechaActual = LocalDate.now();
+        logger.debug("Fecha actual para verificación: {}", fechaActual);
+        
+        // Buscar pagos pendientes cuya fecha de vencimiento ya pasó
         List<Pago> pagosPendientes = pagoRepository.findPagosPendientesParaAtraso(fechaActual);
         
         if (pagosPendientes.isEmpty()) {
-            logger.debug("No hay pagos pendientes para marcar como atrasados");
+            logger.debug("✅ No hay pagos pendientes vencidos para marcar como atrasados");
             return;
         }
+        
+        logger.info("📋 Encontrados {} pagos pendientes vencidos para actualizar", pagosPendientes.size());
         
         int pagosActualizados = 0;
         
         for (Pago pago : pagosPendientes) {
             try {
-                pago.marcarComoEnAtraso();
-                pagoRepository.save(pago);
-                pagosActualizados++;
-                
-                logger.debug("Pago {} marcado como atrasado - Usuario: {}", 
-                           pago.getId(), pago.getUsuarioNombre());
+                // Verificación adicional: solo marcar como atrasado si la fecha actual es posterior al vencimiento
+                if (pago.getFechaVencimiento() != null && fechaActual.isAfter(pago.getFechaVencimiento())) {
+                    logger.debug("⚠️ Marcando pago {} como atrasado - Vencimiento: {}, Fecha actual: {}", 
+                               pago.getId(), pago.getFechaVencimiento(), fechaActual);
+                    
+                    pago.marcarComoEnAtraso();
+                    pagoRepository.save(pago);
+                    pagosActualizados++;
+                    
+                    logger.debug("✅ Pago {} marcado como atrasado - Usuario: {} - Período: {}/{}", 
+                               pago.getId(), pago.getUsuarioNombre(), pago.getPeriodoMes(), pago.getPeriodoAnio());
+                } else {
+                    logger.warn("⚠️ Pago {} no se marcó como atrasado - Fecha vencimiento: {}, Fecha actual: {}", 
+                              pago.getId(), pago.getFechaVencimiento(), fechaActual);
+                }
                 
             } catch (Exception e) {
-                logger.error("Error actualizando pago {} a estado atrasado: {}", 
+                logger.error("❌ Error actualizando pago {} a estado atrasado: {}", 
                            pago.getId(), e.getMessage());
             }
         }
         
-        logger.info("Actualización de pagos en atraso completada: {} pagos actualizados", pagosActualizados);
+        logger.info("✅ Actualización de pagos en atraso completada: {} de {} pagos actualizados", 
+                   pagosActualizados, pagosPendientes.size());
     }
     
     @Override

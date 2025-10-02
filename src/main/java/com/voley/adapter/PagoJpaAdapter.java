@@ -26,9 +26,9 @@ public class PagoJpaAdapter implements PagoRepositoryPort {
     
     @Override
     public Pago save(Pago pago) {
-        logger.debug("🏛️ ADAPTER: Intentando guardar pago en base de datos: {}", pago);
+        logger.debug("ADAPTER: Intentando guardar pago en base de datos: {}", pago);
         Pago pagoGuardado = pagoJpaRepository.save(pago);
-        logger.debug("🏛️ ADAPTER: Pago guardado exitosamente con ID: {}", pagoGuardado.getId());
+        logger.debug("ADAPTER: Pago guardado exitosamente con ID: {}", pagoGuardado.getId());
         return pagoGuardado;
     }
     
