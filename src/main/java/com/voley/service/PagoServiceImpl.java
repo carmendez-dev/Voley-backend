@@ -39,7 +39,7 @@ public class PagoServiceImpl implements PagoService {
     
     @Override
     public Pago crearPago(Pago pago) {
-        logger.debug("💰 Creando pago manual: usuarioId={}, monto={}, estado={}", 
+        logger.debug("Creando pago manual: usuarioId={}, monto={}, estado={}", 
                     pago.getUsuario() != null ? pago.getUsuario().getId() : "null",
                     pago.getMonto(), pago.getEstado());
         
@@ -76,7 +76,7 @@ public class PagoServiceImpl implements PagoService {
             if (pago.getFechaPago() == null) {
                 pago.setFechaPago(LocalDate.now());
             }
-            logger.debug("✅ Pago marcado como pagado con fecha: {}", pago.getFechaPago());
+            logger.debug("Pago marcado como pagado con fecha: {}", pago.getFechaPago());
         }
         
         // Establecer nombre del usuario automáticamente
@@ -84,7 +84,7 @@ public class PagoServiceImpl implements PagoService {
             pago.setUsuarioNombre(pago.getUsuario().getNombreCompleto());
         }
         
-        logger.debug("📋 Guardando pago: periodo={}/{}, vencimiento={}, estado={}, metodoPago={}", 
+        logger.debug("Guardando pago: periodo={}/{}, vencimiento={}, estado={}, metodoPago={}", 
                     pago.getPeriodoMes(), pago.getPeriodoAnio(), pago.getFechaVencimiento(),
                     pago.getEstado(), pago.getMetodoPago());
         
@@ -355,6 +355,53 @@ public class PagoServiceImpl implements PagoService {
     }
     
     @Override
+    public Pago marcarComoPagadoConComprobante(Long pagoId, Double monto, String metodoPago, String rutaComprobante) {
+        Optional<Pago> pagoOpt = pagoRepository.findById(pagoId);
+        if (pagoOpt.isPresent()) {
+            Pago pago = pagoOpt.get();
+            pago.marcarComoPagado(metodoPago);
+            
+            // Asignar el comprobante si se proporcionó
+            if (rutaComprobante != null && !rutaComprobante.trim().isEmpty()) {
+                pago.setComprobante(rutaComprobante);
+                logger.info("Comprobante asignado al pago ID {}: {}", pagoId, rutaComprobante);
+            }
+            
+            return pagoRepository.save(pago);
+        }
+        throw new RuntimeException("Pago no encontrado con ID: " + pagoId);
+    }
+    
+    @Override
+    public Pago marcarComoPagadoCompleto(Long pagoId, Double monto, String metodoPago, String rutaComprobante, String observaciones) {
+        Optional<Pago> pagoOpt = pagoRepository.findById(pagoId);
+        if (pagoOpt.isPresent()) {
+            Pago pago = pagoOpt.get();
+            pago.marcarComoPagado(metodoPago);
+            
+            // Asignar el comprobante si se proporcionó
+            if (rutaComprobante != null && !rutaComprobante.trim().isEmpty()) {
+                pago.setComprobante(rutaComprobante);
+                logger.info("Comprobante asignado al pago ID {}: {}", pagoId, rutaComprobante);
+            }
+            
+            // Agregar observaciones si se proporcionaron
+            if (observaciones != null && !observaciones.trim().isEmpty()) {
+                String observacionesExistentes = pago.getObservaciones();
+                if (observacionesExistentes != null && !observacionesExistentes.trim().isEmpty()) {
+                    pago.setObservaciones(observacionesExistentes + " | " + observaciones.trim());
+                } else {
+                    pago.setObservaciones(observaciones.trim());
+                }
+                logger.info("Observaciones agregadas al pago ID {}: {}", pagoId, observaciones);
+            }
+            
+            return pagoRepository.save(pago);
+        }
+        throw new RuntimeException("Pago no encontrado con ID: " + pagoId);
+    }
+    
+    @Override
     public Pago marcarComoRechazado(Long pagoId, String motivoRechazo) {
         Optional<Pago> pagoOpt = pagoRepository.findById(pagoId);
         if (pagoOpt.isPresent()) {
@@ -425,5 +472,17 @@ public class PagoServiceImpl implements PagoService {
         logger.debug("✅ Pago actualizado exitosamente: id={}, estado={}", pagoActualizado.getId(), pagoActualizado.getEstado());
         
         return pagoActualizado;
+    }
+    
+    @Override
+    public Pago actualizarComprobante(Long pagoId, String rutaComprobante) {
+        Optional<Pago> pagoOpt = pagoRepository.findById(pagoId);
+        if (pagoOpt.isPresent()) {
+            Pago pago = pagoOpt.get();
+            pago.setComprobante(rutaComprobante);
+            logger.info("Actualizando comprobante del pago ID {}: {}", pagoId, rutaComprobante);
+            return pagoRepository.save(pago);
+        }
+        throw new RuntimeException("Pago no encontrado con ID: " + pagoId);
     }
 }

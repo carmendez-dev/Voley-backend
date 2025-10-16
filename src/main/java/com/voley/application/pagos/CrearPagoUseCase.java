@@ -30,6 +30,8 @@ public class CrearPagoUseCase {
      * @throws IllegalArgumentException Si los datos del pago son inválidos
      */
     public Pago ejecutar(Pago pago) {
+        // Asignar valores automáticos antes de validar
+        asignarValoresAutomaticos(pago);
         validarPago(pago);
         return pagoService.crearPago(pago);
     }
@@ -57,6 +59,36 @@ public class CrearPagoUseCase {
         
         if (pago.getFechaVencimiento().isBefore(LocalDate.now())) {
             throw new IllegalArgumentException("La fecha de vencimiento no puede ser anterior a la fecha actual");
+        }
+    }
+    
+    /**
+     * Asigna valores automáticos al pago antes de la validación
+     */
+    private void asignarValoresAutomaticos(Pago pago) {
+        if (pago == null) {
+            return;
+        }
+        
+        // Asignar fecha de vencimiento automáticamente si no se proporciona
+        if (pago.getFechaVencimiento() == null) {
+            if (pago.getPeriodoMes() != null && pago.getPeriodoAnio() != null) {
+                // Crear fecha del período (primer día del mes)
+                LocalDate fechaPeriodo = LocalDate.of(pago.getPeriodoAnio(), pago.getPeriodoMes(), 1);
+                // Calcular fecha de vencimiento (último día del mes)
+                LocalDate fechaVencimiento = fechaPeriodo.withDayOfMonth(fechaPeriodo.lengthOfMonth());
+                pago.setFechaVencimiento(fechaVencimiento);
+            }
+        }
+        
+        // Asignar fecha de registro automáticamente si no se proporciona
+        if (pago.getFechaRegistro() == null) {
+            pago.setFechaRegistro(LocalDate.now());
+        }
+        
+        // Si el estado es "pagado", establecer fecha_pago automáticamente
+        if (Pago.EstadoPago.pagado.equals(pago.getEstado()) && pago.getFechaPago() == null) {
+            pago.setFechaPago(LocalDate.now());
         }
     }
 }

@@ -33,6 +33,37 @@ public class ProcesarPagoUseCase {
         return pagoService.marcarComoPagado(pagoId, monto, metodoPago);
     }
     
+    /**
+     * Ejecuta el caso de uso para procesar un pago con comprobante
+     * 
+     * @param pagoId El ID del pago a procesar
+     * @param monto El monto pagado
+     * @param metodoPago El método de pago utilizado
+     * @param rutaComprobante La ruta del comprobante de pago
+     * @return El pago actualizado con estado "pagado" y comprobante guardado
+     * @throws IllegalArgumentException Si los parámetros son inválidos
+     */
+    public Pago ejecutarConComprobante(Long pagoId, Double monto, String metodoPago, String rutaComprobante) {
+        validarParametros(pagoId, monto, metodoPago);
+        return pagoService.marcarComoPagadoConComprobante(pagoId, monto, metodoPago, rutaComprobante);
+    }
+    
+    /**
+     * Ejecuta el caso de uso para procesar un pago completo con comprobante y observaciones
+     * 
+     * @param pagoId El ID del pago a procesar
+     * @param monto El monto pagado
+     * @param metodoPago El método de pago utilizado
+     * @param rutaComprobante La ruta del comprobante de pago
+     * @param observaciones Observaciones adicionales
+     * @return El pago actualizado con estado "pagado", comprobante y observaciones guardadas
+     * @throws IllegalArgumentException Si los parámetros son inválidos
+     */
+    public Pago ejecutarCompleto(Long pagoId, Double monto, String metodoPago, String rutaComprobante, String observaciones) {
+        validarParametros(pagoId, monto, metodoPago);
+        return pagoService.marcarComoPagadoCompleto(pagoId, monto, metodoPago, rutaComprobante, observaciones);
+    }
+    
     private void validarParametros(Long pagoId, Double monto, String metodoPago) {
         if (pagoId == null) {
             throw new IllegalArgumentException("El ID del pago no puede ser nulo");

@@ -95,4 +95,19 @@ public interface PagoService {
      * Actualiza un pago existente
      */
     Pago actualizarPago(Pago pago);
+    
+    /**
+     * Marca un pago como pagado con comprobante
+     */
+    Pago marcarComoPagadoConComprobante(Long pagoId, Double monto, String metodoPago, String rutaComprobante);
+    
+    /**
+     * Marca un pago como pagado con comprobante y observaciones
+     */
+    Pago marcarComoPagadoCompleto(Long pagoId, Double monto, String metodoPago, String rutaComprobante, String observaciones);
+    
+    /**
+     * Actualiza solo el comprobante de un pago existente
+     */
+    Pago actualizarComprobante(Long pagoId, String rutaComprobante);
 }

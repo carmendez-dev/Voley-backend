@@ -4,12 +4,15 @@ import com.voley.application.pagos.*;
 import com.voley.domain.Pago;
 import com.voley.domain.Usuario;
 import com.voley.service.UsuarioService;
+import com.voley.service.FileUploadService;
+import com.voley.service.PagoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -20,8 +23,9 @@ import java.util.stream.Collectors;
  * Demuestra la separación de responsabilidades entre controlador y lógica de negocio
  */
 @RestController
-@RequestMapping("/api/v2/pagos")
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/pagos")
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:5173", "http://localhost:5174"}, 
+             allowedHeaders = "*", allowCredentials = "true")
 public class PagoUseCaseController {
     
     private static final Logger logger = LoggerFactory.getLogger(PagoUseCaseController.class);
@@ -33,7 +37,11 @@ public class PagoUseCaseController {
     private final ProcesarPagoUseCase procesarPagoUseCase;
     private final VerificarPagosEnAtrasoUseCase verificarPagosEnAtrasoUseCase;
     private final ObtenerPagosPorEstadoUseCase obtenerPagosPorEstadoUseCase;
+    private final EliminarPagoUseCase eliminarPagoUseCase;
+    private final ActualizarEstadoPagoUseCase actualizarEstadoPagoUseCase;
     private final UsuarioService usuarioService; // Para obtener usuarios por ID
+    private final FileUploadService fileUploadService; // Para manejo de archivos
+    private final PagoService pagoService; // Para operaciones adicionales con pagos
     
     @Autowired
     public PagoUseCaseController(
@@ -44,7 +52,11 @@ public class PagoUseCaseController {
             ProcesarPagoUseCase procesarPagoUseCase,
             VerificarPagosEnAtrasoUseCase verificarPagosEnAtrasoUseCase,
             ObtenerPagosPorEstadoUseCase obtenerPagosPorEstadoUseCase,
-            UsuarioService usuarioService) {
+            EliminarPagoUseCase eliminarPagoUseCase,
+            ActualizarEstadoPagoUseCase actualizarEstadoPagoUseCase,
+            UsuarioService usuarioService,
+            FileUploadService fileUploadService,
+            PagoService pagoService) {
         this.obtenerTodosLosPagosUseCase = obtenerTodosLosPagosUseCase;
         this.crearPagoUseCase = crearPagoUseCase;
         this.obtenerPagoPorIdUseCase = obtenerPagoPorIdUseCase;
@@ -52,7 +64,11 @@ public class PagoUseCaseController {
         this.procesarPagoUseCase = procesarPagoUseCase;
         this.verificarPagosEnAtrasoUseCase = verificarPagosEnAtrasoUseCase;
         this.obtenerPagosPorEstadoUseCase = obtenerPagosPorEstadoUseCase;
+        this.eliminarPagoUseCase = eliminarPagoUseCase;
+        this.actualizarEstadoPagoUseCase = actualizarEstadoPagoUseCase;
         this.usuarioService = usuarioService;
+        this.fileUploadService = fileUploadService;
+        this.pagoService = pagoService;
     }
     
     /**
@@ -88,10 +104,10 @@ public class PagoUseCaseController {
     }
     
     /**
-     * Crear nuevo pago usando caso de uso
-     * POST /api/v2/pagos
+     * Crear nuevo pago usando caso de uso (JSON)
+     * POST /api/pagos (Content-Type: application/json)
      */
-    @PostMapping
+    @PostMapping(consumes = "application/json")
     public ResponseEntity<Map<String, Object>> crearPago(@RequestBody Pago pago) {
         try {
             logger.info("Creando nuevo pago usando caso de uso");
@@ -112,6 +128,147 @@ public class PagoUseCaseController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
         } catch (Exception e) {
             logger.error("Error interno al crear pago: ", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Error interno del servidor");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+
+    /**
+     * Crear nuevo pago con comprobante usando caso de uso (Multipart)
+     * POST /api/pagos (Content-Type: multipart/form-data)
+     */
+    @PostMapping(consumes = "multipart/form-data")
+    public ResponseEntity<Map<String, Object>> crearPagoConComprobante(
+            @RequestParam Long usuarioId,
+            @RequestParam Integer periodoMes,
+            @RequestParam Integer periodoAnio,
+            @RequestParam Double monto,
+            @RequestParam String metodoPago,
+            @RequestParam(required = false) String estado,
+            @RequestParam(required = false) String observaciones,
+            @RequestParam(required = false) MultipartFile comprobante) {
+        try {
+            logger.info("Creando nuevo pago con comprobante para usuario ID: {}", usuarioId);
+            
+            // Crear objeto Pago con los datos recibidos
+            Pago pago = new Pago();
+            
+            // Obtener el usuario
+            Optional<Usuario> usuarioOpt = usuarioService.obtenerUsuarioPorId(usuarioId);
+            if (!usuarioOpt.isPresent()) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("success", false);
+                errorResponse.put("message", "Usuario no encontrado con ID: " + usuarioId);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+            }
+            
+            pago.setUsuario(usuarioOpt.get());
+            pago.setPeriodoMes(periodoMes);
+            pago.setPeriodoAnio(periodoAnio);
+            pago.setMonto(java.math.BigDecimal.valueOf(monto));
+            pago.setMetodoPago(metodoPago);
+            
+            // Establecer estado (por defecto pendiente si no se especifica)
+            if (estado != null && !estado.trim().isEmpty()) {
+                try {
+                    pago.setEstado(Pago.EstadoPago.valueOf(estado.toLowerCase()));
+                } catch (IllegalArgumentException e) {
+                    Map<String, Object> errorResponse = new HashMap<>();
+                    errorResponse.put("success", false);
+                    errorResponse.put("message", "Estado inválido: " + estado);
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+                }
+            } else {
+                pago.setEstado(Pago.EstadoPago.pendiente);
+            }
+            
+            if (observaciones != null && !observaciones.trim().isEmpty()) {
+                pago.setObservaciones(observaciones.trim());
+            }
+            
+            // Crear el pago usando el caso de uso
+            Pago pagoCreado = crearPagoUseCase.ejecutar(pago);
+            
+            // Si hay comprobante, subirlo y actualizar la ruta
+            if (comprobante != null && !comprobante.isEmpty()) {
+                try {
+                    logger.info("Comprobante recibido: {} ({} bytes)", comprobante.getOriginalFilename(), comprobante.getSize());
+                    
+                    // Subir el archivo usando el FileUploadService
+                    FileUploadService.FileUploadResult uploadResult = fileUploadService.subirComprobante(comprobante, pagoCreado.getId());
+                    String rutaComprobante = uploadResult.getFilePath();
+                    logger.info("Comprobante subido exitosamente: {}", rutaComprobante);
+                    
+                    // Actualizar el pago con la ruta del comprobante usando el servicio
+                    pagoCreado = pagoService.actualizarComprobante(pagoCreado.getId(), rutaComprobante);
+                    logger.info("Pago actualizado con comprobante - ID: {}, Ruta: {}", pagoCreado.getId(), rutaComprobante);
+                    
+                } catch (Exception e) {
+                    logger.error("Error al subir comprobante para pago ID {}: {}", pagoCreado.getId(), e.getMessage());
+                    // No fallar la creación del pago si el comprobante no se puede subir
+                    // Solo log del error y continuar
+                }
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Pago creado exitosamente" + (comprobante != null ? " con comprobante" : ""));
+            response.put("data", convertirPagoAMap(pagoCreado));
+            
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (IllegalArgumentException e) {
+            logger.warn("Error de validación al crear pago: {}", e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Error de validación");
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+        } catch (Exception e) {
+            logger.error("Error interno al crear pago: ", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Error interno del servidor");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
+    /**
+     * Obtener pago por ID usando caso de uso
+     * GET /api/v2/pagos/{id}
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> obtenerPagoPorId(@PathVariable Long id) {
+        try {
+            logger.info("Obteniendo pago por ID: {} usando caso de uso", id);
+            
+            Optional<Pago> pagoOpt = obtenerPagoPorIdUseCase.ejecutar(id);
+            
+            if (pagoOpt.isPresent()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", true);
+                response.put("message", "Pago encontrado exitosamente");
+                response.put("data", convertirPagoAMap(pagoOpt.get()));
+                
+                return ResponseEntity.ok(response);
+            } else {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("message", "Pago no encontrado");
+                response.put("pagoId", id);
+                
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
+            
+        } catch (IllegalArgumentException e) {
+            logger.warn("Error de validación al obtener pago {}: {}", id, e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+        } catch (Exception e) {
+            logger.error("Error interno al obtener pago {}: ", id, e);
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("message", "Error interno del servidor");
@@ -162,17 +319,53 @@ public class PagoUseCaseController {
     
     /**
      * Procesar pago usando caso de uso
-     * PUT /api/v2/pagos/{id}/pagar
+     * PUT /api/pagos/{id}/pagar
      */
     @PutMapping("/{id}/pagar")
     public ResponseEntity<Map<String, Object>> procesarPago(
             @PathVariable Long id,
             @RequestParam Double monto,
-            @RequestParam String metodoPago) {
+            @RequestParam String metodoPago,
+            @RequestParam(required = false) String rutaComprobante) {
+        return procesarPagoInterno(id, monto, metodoPago, rutaComprobante, null);
+    }
+    
+    /**
+     * Procesar pago y marcarlo como PAGADO (endpoint que espera el frontend)
+     * POST /api/pagos/{id}/procesar
+     */
+    @PostMapping("/{id}/procesar")
+    public ResponseEntity<Map<String, Object>> procesarPagoAlternativo(
+            @PathVariable Long id,
+            @RequestParam Double monto,
+            @RequestParam String metodoPago,
+            @RequestParam(required = false) String comprobante,
+            @RequestParam(required = false) String observaciones) {
+        return procesarPagoInterno(id, monto, metodoPago, comprobante, observaciones);
+    }
+    
+    /**
+     * Método interno común para procesar pagos
+     */
+    private ResponseEntity<Map<String, Object>> procesarPagoInterno(
+            Long id, Double monto, String metodoPago, String rutaComprobante, String observaciones) {
         try {
             logger.info("Procesando pago ID: {} con monto: {} y método: {}", id, monto, metodoPago);
+            if (rutaComprobante != null) {
+                logger.info("Comprobante incluido: {}", rutaComprobante);
+            }
             
-            Pago pagoProcesado = procesarPagoUseCase.ejecutar(id, monto, metodoPago);
+            // Usar el método completo que guarda todo directamente en la base de datos
+            Pago pagoProcesado;
+            if ((rutaComprobante != null && !rutaComprobante.trim().isEmpty()) || 
+                (observaciones != null && !observaciones.trim().isEmpty())) {
+                // Usar método completo que guarda comprobante y observaciones en BD
+                pagoProcesado = procesarPagoUseCase.ejecutarCompleto(id, monto, metodoPago, rutaComprobante, observaciones);
+                logger.info("Pago procesado completamente - Comprobante: {} | Observaciones: {}", rutaComprobante, observaciones);
+            } else {
+                // Usar método básico si no hay comprobante ni observaciones
+                pagoProcesado = procesarPagoUseCase.ejecutar(id, monto, metodoPago);
+            }
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
@@ -196,8 +389,54 @@ public class PagoUseCaseController {
     }
     
     /**
+     * Actualizar estado de un pago (para estados diferentes a PAGADO)
+     * PUT /api/pagos/{id}
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> actualizarEstadoPago(
+            @PathVariable Long id,
+            @RequestParam String estado,
+            @RequestParam(required = false) String observaciones) {
+        try {
+            logger.info("Actualizando estado del pago ID: {} a estado: {}", id, estado);
+            
+            // Convertir string a enum
+            Pago.EstadoPago nuevoEstado;
+            try {
+                nuevoEstado = Pago.EstadoPago.valueOf(estado.toLowerCase());
+            } catch (IllegalArgumentException e) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("success", false);
+                errorResponse.put("message", "Estado inválido: " + estado + ". Estados válidos: pendiente, atraso, rechazado");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+            }
+            
+            Pago pagoActualizado = actualizarEstadoPagoUseCase.ejecutar(id, nuevoEstado, observaciones);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Estado del pago actualizado exitosamente");
+            response.put("data", convertirPagoAMap(pagoActualizado));
+            
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            logger.warn("Error de validación al actualizar estado: {}", e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+        } catch (Exception e) {
+            logger.error("Error al actualizar estado del pago: ", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Error interno del servidor");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
+    /**
      * Verificar pagos en atraso usando caso de uso
-     * PUT /api/v2/pagos/verificar-atrasos
+     * PUT /api/pagos/verificar-atrasos
      */
     @PutMapping("/verificar-atrasos")
     public ResponseEntity<Map<String, Object>> verificarPagosEnAtraso() {
@@ -250,6 +489,72 @@ public class PagoUseCaseController {
             errorResponse.put("success", false);
             errorResponse.put("message", "Estado de pago inválido: " + estado);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+        }
+    }
+    
+    /**
+     * Eliminar pago usando caso de uso
+     * DELETE /api/v2/pagos/{id}
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> eliminarPago(@PathVariable Long id) {
+        try {
+            logger.info("Eliminando pago con ID: {} usando caso de uso", id);
+            
+            boolean eliminado = eliminarPagoUseCase.ejecutar(id);
+            
+            Map<String, Object> response = new HashMap<>();
+            
+            if (eliminado) {
+                response.put("success", true);
+                response.put("message", "Pago eliminado exitosamente");
+                response.put("timestamp", LocalDate.now().toString());
+                response.put("pagoId", id);
+                
+                logger.info("Pago eliminado exitosamente: {}", id);
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "No se pudo eliminar el pago");
+                response.put("timestamp", LocalDate.now().toString());
+                response.put("pagoId", id);
+                
+                logger.warn("No se pudo eliminar el pago: {}", id);
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+        } catch (IllegalArgumentException e) {
+            logger.error("Error de validación al eliminar pago {}: {}", id, e.getMessage());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            response.put("timestamp", LocalDate.now().toString());
+            response.put("pagoId", id);
+            
+            return ResponseEntity.badRequest().body(response);
+            
+        } catch (IllegalStateException e) {
+            logger.error("Error de estado al eliminar pago {}: {}", id, e.getMessage());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            response.put("timestamp", LocalDate.now().toString());
+            response.put("pagoId", id);
+            
+            return ResponseEntity.status(409).body(response); // 409 Conflict
+            
+        } catch (Exception e) {
+            logger.error("Error interno al eliminar pago {}: {}", id, e.getMessage());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "Error interno del servidor");
+            response.put("timestamp", LocalDate.now().toString());
+            response.put("pagoId", id);
+            
+            return ResponseEntity.status(500).body(response);
         }
     }
     
