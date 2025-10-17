@@ -25,8 +25,10 @@ import java.util.Optional;
  */
 @RestController
 @RequestMapping("/api/torneos")
-@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:5173", "http://localhost:5174"}, 
-             allowedHeaders = "*", allowCredentials = "true")
+@CrossOrigin(originPatterns = {"http://localhost:*", "http://127.0.0.1:*"}, 
+             allowedHeaders = {"Origin", "Content-Type", "Accept", "Authorization", 
+                              "Access-Control-Request-Method", "Access-Control-Request-Headers"},
+             allowCredentials = "true")
 public class TorneoUseCaseController {
     
     private static final Logger logger = LoggerFactory.getLogger(TorneoUseCaseController.class);
