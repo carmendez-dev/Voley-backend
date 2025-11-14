@@ -47,13 +47,32 @@ public class UsuarioJpaAdapter implements UsuarioRepositoryPort {
     }
     
     @Override
-    public List<Usuario> findByTipo(Usuario.TipoUsuario tipo) {
-        return usuarioJpaRepository.findByTipo(tipo);
+    public List<Usuario> findByEstado(Usuario.EstadoUsuario estado) {
+        return usuarioJpaRepository.findByEstado(estado);
     }
     
     @Override
-    public List<Usuario> findByEstado(Usuario.EstadoUsuario estado) {
-        return usuarioJpaRepository.findByEstado(estado);
+    public List<Usuario> findByPesoBetween(Float pesoMin, Float pesoMax) {
+        return usuarioJpaRepository.findByPesoBetween(pesoMin, pesoMax);
+    }
+    
+    @Override
+    public List<Usuario> findByAlturaBetween(Float alturaMin, Float alturaMax) {
+        return usuarioJpaRepository.findByAlturaBetween(alturaMin, alturaMax);
+    }
+    
+    @Override
+    public List<Usuario> findByPrimerNombreContainingIgnoreCaseOrSegundoNombreContainingIgnoreCaseOrTercerNombreContainingIgnoreCase(
+            String primerNombre, String segundoNombre, String tercerNombre) {
+        return usuarioJpaRepository.findByPrimerNombreContainingIgnoreCaseOrSegundoNombreContainingIgnoreCaseOrTercerNombreContainingIgnoreCase(
+            primerNombre, segundoNombre, tercerNombre);
+    }
+    
+    @Override
+    public List<Usuario> findByPrimerApellidoContainingIgnoreCaseOrSegundoApellidoContainingIgnoreCase(
+            String primerApellido, String segundoApellido) {
+        return usuarioJpaRepository.findByPrimerApellidoContainingIgnoreCaseOrSegundoApellidoContainingIgnoreCase(
+            primerApellido, segundoApellido);
     }
     
     @Override

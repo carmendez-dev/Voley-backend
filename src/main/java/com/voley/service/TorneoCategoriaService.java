@@ -59,7 +59,7 @@ public class TorneoCategoriaService {
         }
         
         // Verificar que no existe ya la relación
-        if (torneoCategoriaRepository.existsByTorneoIdAndCategoriaId(torneoId, categoriaId)) {
+        if (torneoCategoriaRepository.existsByTorneoIdAndCategoriaIdCategoria(torneoId, categoriaId)) {
             throw new IllegalArgumentException("La categoría ya está asociada al torneo");
         }
         
@@ -77,7 +77,7 @@ public class TorneoCategoriaService {
     public void desasociarCategoriaDelTorneo(Long torneoId, Long categoriaId) {
         logger.info("Desasociando categoría {} del torneo {}", categoriaId, torneoId);
         
-        Optional<TorneoCategoria> relacion = torneoCategoriaRepository.findByTorneoIdAndCategoriaId(torneoId, categoriaId);
+        Optional<TorneoCategoria> relacion = torneoCategoriaRepository.findByTorneoIdAndCategoriaIdCategoria(torneoId, categoriaId);
         if (relacion.isEmpty()) {
             throw new IllegalArgumentException("No existe la asociación entre el torneo y la categoría");
         }
@@ -122,6 +122,7 @@ public class TorneoCategoriaService {
                     Categoria categoria = relacion.getCategoria();
                     Torneo torneo = relacion.getTorneo();
                     return new CategoriaBasicaDTO(
+                        relacion.getId(),  // idTorneoCategoria - ID de la relación
                         categoria.getIdCategoria(), 
                         categoria.getNombre(),
                         torneo.getId(),
@@ -143,7 +144,7 @@ public class TorneoCategoriaService {
             throw new IllegalArgumentException("No existe categoría con ID: " + categoriaId);
         }
         
-        List<TorneoCategoria> relaciones = torneoCategoriaRepository.findByCategoriaId(categoriaId);
+        List<TorneoCategoria> relaciones = torneoCategoriaRepository.findByCategoriaIdCategoria(categoriaId);
         return relaciones.stream()
                 .map(TorneoCategoria::getTorneo)
                 .collect(Collectors.toList());
@@ -154,7 +155,7 @@ public class TorneoCategoriaService {
      */
     @Transactional(readOnly = true)
     public boolean estaAsociada(Long torneoId, Long categoriaId) {
-        return torneoCategoriaRepository.existsByTorneoIdAndCategoriaId(torneoId, categoriaId);
+        return torneoCategoriaRepository.existsByTorneoIdAndCategoriaIdCategoria(torneoId, categoriaId);
     }
     
     /**
@@ -170,7 +171,7 @@ public class TorneoCategoriaService {
      */
     @Transactional(readOnly = true)
     public long contarTorneosPorCategoria(Long categoriaId) {
-        return torneoCategoriaRepository.countByCategoriaId(categoriaId);
+        return torneoCategoriaRepository.countByCategoriaIdCategoria(categoriaId);
     }
     
     /**
@@ -186,6 +187,14 @@ public class TorneoCategoriaService {
      */
     public void eliminarTodosLosTorneosDeCategoria(Long categoriaId) {
         logger.info("Eliminando todos los torneos de la categoría {}", categoriaId);
-        torneoCategoriaRepository.deleteByCategoriaId(categoriaId);
+        torneoCategoriaRepository.deleteByCategoriaIdCategoria(categoriaId);
+    }
+    
+    /**
+     * Obtiene una relación TorneoCategoria por ID
+     */
+    @Transactional(readOnly = true)
+    public Optional<TorneoCategoria> obtenerTorneoCategoriaById(Long id) {
+        return torneoCategoriaRepository.findById(id);
     }
 }

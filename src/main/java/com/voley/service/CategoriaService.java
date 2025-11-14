@@ -31,16 +31,21 @@ public class CategoriaService {
     
     /**
      * Crea una nueva categoría
+     * Permite el mismo nombre si el género es diferente
      */
     public Categoria crearCategoria(Categoria categoria) {
-        logger.info("Creando nueva categoría: {}", categoria.getNombre());
+        logger.info("Creando nueva categoría: {} - {}", categoria.getNombre(), categoria.getGenero());
         
         // Validar datos
         categoria.validar();
         
-        // Verificar que no exista el nombre
-        if (categoriaRepository.existePorNombre(categoria.getNombre())) {
-            throw new IllegalArgumentException("Ya existe una categoría con el nombre: " + categoria.getNombre());
+        // Verificar que no exista la combinación nombre + género
+        if (categoriaRepository.existePorNombreYGenero(categoria.getNombre(), categoria.getGenero())) {
+            throw new IllegalArgumentException(
+                String.format("Ya existe una categoría con el nombre '%s' y género '%s'", 
+                             categoria.getNombre(), 
+                             categoria.getGenero() != null ? categoria.getGenero().getDescripcion() : "Sin género")
+            );
         }
         
         Categoria categoriaGuardada = categoriaRepository.guardar(categoria);
@@ -51,6 +56,7 @@ public class CategoriaService {
     
     /**
      * Actualiza una categoría existente
+     * Permite el mismo nombre si el género es diferente
      */
     public Categoria actualizarCategoria(Long id, Categoria categoriaActualizada) {
         logger.info("Actualizando categoría con ID: {}", id);
@@ -66,9 +72,16 @@ public class CategoriaService {
         // Validar datos actualizados
         categoriaActualizada.validar();
         
-        // Verificar que no exista otro con el mismo nombre
-        if (categoriaRepository.existePorNombre(categoriaActualizada.getNombre(), id)) {
-            throw new IllegalArgumentException("Ya existe otra categoría con el nombre: " + categoriaActualizada.getNombre());
+        // Verificar que no exista otra con el mismo nombre y género
+        if (categoriaRepository.existePorNombreYGenero(
+                categoriaActualizada.getNombre(), 
+                categoriaActualizada.getGenero(), 
+                id)) {
+            throw new IllegalArgumentException(
+                String.format("Ya existe otra categoría con el nombre '%s' y género '%s'", 
+                             categoriaActualizada.getNombre(),
+                             categoriaActualizada.getGenero() != null ? categoriaActualizada.getGenero().getDescripcion() : "Sin género")
+            );
         }
         
         // Actualizar campos

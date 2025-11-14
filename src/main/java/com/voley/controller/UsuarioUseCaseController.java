@@ -1,473 +1,325 @@
 package com.voley.controller;
 
-import com.voley.application.usuarios.*;
 import com.voley.domain.Usuario;
+import com.voley.dto.UsuarioRequestDTO;
+import com.voley.dto.UsuarioResponseDTO;
+import com.voley.service.UsuarioService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import java.time.LocalDate;
+import jakarta.validation.Valid;
+import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
- * Controlador REST que utiliza casos de uso para usuarios (Clean Architecture)
- * Demuestra la separación de responsabilidades entre controlador y lógica de negocio
+ * 🎯 Controlador CRUD para Administrar Jugadores (tabla usuarios)
+ * 
+ * Endpoints principales:
+ * - GET /usuarios - Obtener todos los usuarios
+ * - POST /usuarios - Crear nuevo usuario
+ * - PUT /usuarios/{id} - Actualizar usuario
+ * - DELETE /usuarios/{id} - Eliminar usuario
+ * 
+ * Validaciones implementadas:
+ * - Email y cédula únicos
+ * - Estado activo/inactivo
+ * - Validación de campos requeridos
  */
 @RestController
 @RequestMapping("/api/usuarios")
-@CrossOrigin(originPatterns = {"http://localhost:*", "http://127.0.0.1:*"}, 
-             allowedHeaders = {"Origin", "Content-Type", "Accept", "Authorization", 
-                              "Access-Control-Request-Method", "Access-Control-Request-Headers"},
-             allowCredentials = "true")
+@Validated
 public class UsuarioUseCaseController {
     
     private static final Logger logger = LoggerFactory.getLogger(UsuarioUseCaseController.class);
     
-    private final CrearUsuarioUseCase crearUsuarioUseCase;
-    private final ObtenerTodosLosUsuariosUseCase obtenerTodosLosUsuariosUseCase;
-    private final ObtenerUsuarioPorIdUseCase obtenerUsuarioPorIdUseCase;
-    private final ObtenerUsuarioPorCedulaUseCase obtenerUsuarioPorCedulaUseCase;
-    private final ObtenerUsuarioPorEmailUseCase obtenerUsuarioPorEmailUseCase;
-    private final ObtenerUsuariosPorTipoUseCase obtenerUsuariosPorTipoUseCase;
-    private final ObtenerUsuariosPorEstadoUseCase obtenerUsuariosPorEstadoUseCase;
-    private final ActualizarUsuarioUseCase actualizarUsuarioUseCase;
-    private final CambiarEstadoUsuarioUseCase cambiarEstadoUsuarioUseCase;
-    private final EliminarUsuarioUseCase eliminarUsuarioUseCase;
+    private final UsuarioService usuarioService;
     
     @Autowired
-    public UsuarioUseCaseController(
-            CrearUsuarioUseCase crearUsuarioUseCase,
-            ObtenerTodosLosUsuariosUseCase obtenerTodosLosUsuariosUseCase,
-            ObtenerUsuarioPorIdUseCase obtenerUsuarioPorIdUseCase,
-            ObtenerUsuarioPorCedulaUseCase obtenerUsuarioPorCedulaUseCase,
-            ObtenerUsuarioPorEmailUseCase obtenerUsuarioPorEmailUseCase,
-            ObtenerUsuariosPorTipoUseCase obtenerUsuariosPorTipoUseCase,
-            ObtenerUsuariosPorEstadoUseCase obtenerUsuariosPorEstadoUseCase,
-            ActualizarUsuarioUseCase actualizarUsuarioUseCase,
-            CambiarEstadoUsuarioUseCase cambiarEstadoUsuarioUseCase,
-            EliminarUsuarioUseCase eliminarUsuarioUseCase) {
-        this.crearUsuarioUseCase = crearUsuarioUseCase;
-        this.obtenerTodosLosUsuariosUseCase = obtenerTodosLosUsuariosUseCase;
-        this.obtenerUsuarioPorIdUseCase = obtenerUsuarioPorIdUseCase;
-        this.obtenerUsuarioPorCedulaUseCase = obtenerUsuarioPorCedulaUseCase;
-        this.obtenerUsuarioPorEmailUseCase = obtenerUsuarioPorEmailUseCase;
-        this.obtenerUsuariosPorTipoUseCase = obtenerUsuariosPorTipoUseCase;
-        this.obtenerUsuariosPorEstadoUseCase = obtenerUsuariosPorEstadoUseCase;
-        this.actualizarUsuarioUseCase = actualizarUsuarioUseCase;
-        this.cambiarEstadoUsuarioUseCase = cambiarEstadoUsuarioUseCase;
-        this.eliminarUsuarioUseCase = eliminarUsuarioUseCase;
+    public UsuarioUseCaseController(UsuarioService usuarioService) {
+        this.usuarioService = usuarioService;
     }
     
     /**
-     * Crear un nuevo usuario usando caso de uso
-     * POST /api/usuarios
-     */
-    @PostMapping
-    public ResponseEntity<Map<String, Object>> crearUsuario(@RequestBody Usuario usuario) {
-        try {
-            logger.info("Creando nuevo usuario usando caso de uso");
-            Usuario usuarioCreado = crearUsuarioUseCase.ejecutar(usuario);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Usuario creado exitosamente");
-            response.put("data", convertirUsuarioAMap(usuarioCreado));
-            
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (IllegalArgumentException e) {
-            logger.warn("Error de validación al crear usuario: {}", e.getMessage());
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Error de validación");
-            errorResponse.put("error", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
-        } catch (Exception e) {
-            logger.error("Error interno al crear usuario: ", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Error interno del servidor");
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
-        }
-    }
-    
-    /**
-     * Obtener todos los usuarios usando caso de uso
-     * GET /api/usuarios
+     * 📋 GET /usuarios - Obtener todos los usuarios
+     * 🎯 Meta: Tener lista la base de jugadores registrada
      */
     @GetMapping
-    public ResponseEntity<Map<String, Object>> obtenerTodosLosUsuarios() {
+    public ResponseEntity<Map<String, Object>> obtenerTodosLosUsuarios(
+            @RequestParam(defaultValue = "false") boolean completo,
+            @RequestParam(required = false) String estado) {
         try {
-            logger.info("Obteniendo todos los usuarios usando caso de uso");
-            List<Usuario> usuarios = obtenerTodosLosUsuariosUseCase.ejecutar();
-            
-            List<Map<String, Object>> usuariosList = usuarios.stream()
-                    .map(this::convertirUsuarioAMap)
-                    .collect(Collectors.toList());
+            logger.info("📋 Obteniendo usuarios - completo: {}, estado: {}", completo, estado);
             
             Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Usuarios obtenidos exitosamente");
-            response.put("timestamp", LocalDate.now().toString());
-            response.put("total", usuariosList.size());
-            response.put("data", usuariosList);
+            
+            if (completo) {
+                // Usar DTOs con cálculos automáticos (IMC, edad, etc.)
+                if (estado != null) {
+                    Usuario.EstadoUsuario estadoEnum = Usuario.EstadoUsuario.valueOf(estado);
+                    List<UsuarioResponseDTO> usuarios = usuarioService.obtenerUsuariosPorEstadoDTO(estadoEnum);
+                    response = crearRespuestaExitosa("Usuarios filtrados obtenidos", usuarios, usuarios.size());
+                } else {
+                    List<UsuarioResponseDTO> usuarios = usuarioService.obtenerTodosLosUsuariosDTO();
+                    response = crearRespuestaExitosa("Usuarios completos obtenidos", usuarios, usuarios.size());
+                }
+            } else {
+                // Respuesta básica usando DTOs para evitar referencia circular
+                List<UsuarioResponseDTO> usuarios = usuarioService.obtenerTodosLosUsuariosDTO();
+                response = crearRespuestaExitosa("Usuarios obtenidos", usuarios, usuarios.size());
+            }
             
             return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
-            logger.error("Error al obtener usuarios: ", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Error al obtener los usuarios");
-            errorResponse.put("error", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+            logger.error("❌ Error al obtener usuarios: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(crearRespuestaError("Error interno del servidor"));
         }
     }
     
     /**
-     * Obtener usuario por ID usando caso de uso
-     * GET /api/usuarios/{id}
+     * 🆕 POST /usuarios - Crear nuevo usuario
+     * 🎯 Validaciones: email y cédula únicos, campos requeridos
+     */
+    @PostMapping
+    public ResponseEntity<Map<String, Object>> crearUsuario(@Valid @RequestBody UsuarioRequestDTO usuarioDTO) {
+        try {
+            logger.info("🆕 Creando nuevo usuario: {}", usuarioDTO.getCedula());
+            
+            UsuarioResponseDTO usuarioCreado = usuarioService.crearUsuarioConDTO(usuarioDTO);
+            
+            Map<String, Object> response = crearRespuestaExitosa(
+                "Usuario creado exitosamente", 
+                usuarioCreado, 
+                null
+            );
+            
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            
+        } catch (IllegalArgumentException e) {
+            logger.warn("⚠️ Error de validación: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(crearRespuestaError(e.getMessage()));
+                
+        } catch (Exception e) {
+            logger.error("❌ Error interno al crear usuario: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(crearRespuestaError("Error interno del servidor"));
+        }
+    }
+    
+    /**
+     * 🔍 GET /usuarios/{id} - Obtener usuario por ID
      */
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> obtenerUsuarioPorId(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> obtenerUsuarioPorId(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "false") boolean completo) {
         try {
-            logger.info("Obteniendo usuario por ID: {} usando caso de uso", id);
+            logger.info("🔍 Obteniendo usuario ID: {} - completo: {}", id, completo);
             
-            Optional<Usuario> usuarioOpt = obtenerUsuarioPorIdUseCase.ejecutar(id);
-            
-            if (usuarioOpt.isPresent()) {
-                Map<String, Object> response = new HashMap<>();
-                response.put("success", true);
-                response.put("message", "Usuario encontrado exitosamente");
-                response.put("data", convertirUsuarioAMap(usuarioOpt.get()));
-                
-                return ResponseEntity.ok(response);
+            if (completo) {
+                Optional<UsuarioResponseDTO> usuario = usuarioService.obtenerUsuarioCompletoDTO(id);
+                if (usuario.isPresent()) {
+                    return ResponseEntity.ok(crearRespuestaExitosa("Usuario encontrado", usuario.get(), null));
+                }
             } else {
-                Map<String, Object> response = new HashMap<>();
-                response.put("success", false);
-                response.put("message", "Usuario no encontrado");
-                response.put("usuarioId", id);
-                
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+                Optional<UsuarioResponseDTO> usuario = usuarioService.obtenerUsuarioCompletoDTO(id);
+                if (usuario.isPresent()) {
+                    return ResponseEntity.ok(crearRespuestaExitosa("Usuario encontrado", usuario.get(), null));
+                }
             }
             
-        } catch (IllegalArgumentException e) {
-            logger.warn("Error de validación al obtener usuario {}: {}", id, e.getMessage());
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(crearRespuestaError("Usuario no encontrado con ID: " + id));
+                
         } catch (Exception e) {
-            logger.error("Error interno al obtener usuario {}: ", id, e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Error interno del servidor");
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+            logger.error("❌ Error al obtener usuario por ID: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(crearRespuestaError("Error interno del servidor"));
         }
     }
     
     /**
-     * Obtener usuario por cédula usando caso de uso
-     * GET /api/usuarios/cedula/{cedula}
-     */
-    @GetMapping("/cedula/{cedula}")
-    public ResponseEntity<Map<String, Object>> obtenerUsuarioPorCedula(@PathVariable String cedula) {
-        try {
-            logger.info("Obteniendo usuario por cédula: {} usando caso de uso", cedula);
-            
-            Optional<Usuario> usuarioOpt = obtenerUsuarioPorCedulaUseCase.ejecutar(cedula);
-            
-            if (usuarioOpt.isPresent()) {
-                Map<String, Object> response = new HashMap<>();
-                response.put("success", true);
-                response.put("message", "Usuario encontrado exitosamente");
-                response.put("data", convertirUsuarioAMap(usuarioOpt.get()));
-                
-                return ResponseEntity.ok(response);
-            } else {
-                Map<String, Object> response = new HashMap<>();
-                response.put("success", false);
-                response.put("message", "Usuario no encontrado");
-                response.put("cedula", cedula);
-                
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-            }
-            
-        } catch (IllegalArgumentException e) {
-            logger.warn("Error de validación: {}", e.getMessage());
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
-        }
-    }
-    
-    /**
-     * Obtener usuario por email usando caso de uso
-     * GET /api/usuarios/email/{email}
-     */
-    @GetMapping("/email/{email}")
-    public ResponseEntity<Map<String, Object>> obtenerUsuarioPorEmail(@PathVariable String email) {
-        try {
-            logger.info("Obteniendo usuario por email: {} usando caso de uso", email);
-            
-            Optional<Usuario> usuarioOpt = obtenerUsuarioPorEmailUseCase.ejecutar(email);
-            
-            if (usuarioOpt.isPresent()) {
-                Map<String, Object> response = new HashMap<>();
-                response.put("success", true);
-                response.put("message", "Usuario encontrado exitosamente");
-                response.put("data", convertirUsuarioAMap(usuarioOpt.get()));
-                
-                return ResponseEntity.ok(response);
-            } else {
-                Map<String, Object> response = new HashMap<>();
-                response.put("success", false);
-                response.put("message", "Usuario no encontrado");
-                response.put("email", email);
-                
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-            }
-            
-        } catch (IllegalArgumentException e) {
-            logger.warn("Error de validación: {}", e.getMessage());
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
-        }
-    }
-    
-    /**
-     * Obtener usuarios por tipo usando caso de uso
-     * GET /api/usuarios/tipo/{tipo}
-     */
-    @GetMapping("/tipo/{tipo}")
-    public ResponseEntity<Map<String, Object>> obtenerUsuariosPorTipo(@PathVariable String tipo) {
-        try {
-            logger.info("Obteniendo usuarios por tipo: {}", tipo);
-            
-            Usuario.TipoUsuario tipoUsuario = Usuario.TipoUsuario.valueOf(tipo.toUpperCase());
-            List<Usuario> usuarios = obtenerUsuariosPorTipoUseCase.ejecutar(tipoUsuario);
-            
-            List<Map<String, Object>> usuariosList = usuarios.stream()
-                    .map(this::convertirUsuarioAMap)
-                    .collect(Collectors.toList());
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Usuarios por tipo obtenidos exitosamente");
-            response.put("tipo", tipo);
-            response.put("total", usuariosList.size());
-            response.put("data", usuariosList);
-            
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            logger.warn("Tipo inválido: {}", tipo);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Tipo de usuario inválido: " + tipo);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
-        }
-    }
-    
-    /**
-     * Obtener usuarios por estado usando caso de uso
-     * GET /api/usuarios/estado/{estado}
-     */
-    @GetMapping("/estado/{estado}")
-    public ResponseEntity<Map<String, Object>> obtenerUsuariosPorEstado(@PathVariable String estado) {
-        try {
-            logger.info("Obteniendo usuarios por estado: {}", estado);
-            
-            Usuario.EstadoUsuario estadoUsuario = Usuario.EstadoUsuario.valueOf(estado.toUpperCase());
-            List<Usuario> usuarios = obtenerUsuariosPorEstadoUseCase.ejecutar(estadoUsuario);
-            
-            List<Map<String, Object>> usuariosList = usuarios.stream()
-                    .map(this::convertirUsuarioAMap)
-                    .collect(Collectors.toList());
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Usuarios por estado obtenidos exitosamente");
-            response.put("estado", estado);
-            response.put("total", usuariosList.size());
-            response.put("data", usuariosList);
-            
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            logger.warn("Estado inválido: {}", estado);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Estado de usuario inválido: " + estado);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
-        }
-    }
-    
-    /**
-     * Actualizar usuario usando caso de uso
-     * PUT /api/usuarios/{id}
+     * ✏️ PUT /usuarios/{id} - Actualizar usuario
+     * 🎯 Validaciones: email y cédula únicos si cambiaron
      */
     @PutMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> actualizarUsuario(@PathVariable Long id, @RequestBody Usuario usuario) {
-        try {
-            logger.info("Actualizando usuario con ID: {} usando caso de uso", id);
-            Usuario usuarioActualizado = actualizarUsuarioUseCase.ejecutar(id, usuario);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Usuario actualizado exitosamente");
-            response.put("data", convertirUsuarioAMap(usuarioActualizado));
-            
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            logger.warn("Error de validación al actualizar usuario: {}", e.getMessage());
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
-        } catch (Exception e) {
-            logger.error("Error al actualizar usuario: ", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Error interno del servidor");
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
-        }
-    }
-    
-    /**
-     * Cambiar estado de usuario usando caso de uso
-     * PATCH /api/usuarios/{id}/estado
-     */
-    @PatchMapping("/{id}/estado")
-    public ResponseEntity<Map<String, Object>> cambiarEstadoUsuario(
+    public ResponseEntity<Map<String, Object>> actualizarUsuario(
             @PathVariable Long id, 
-            @RequestBody EstadoRequest estadoRequest) {
+            @Valid @RequestBody UsuarioRequestDTO usuarioDTO) {
         try {
-            logger.info("Cambiando estado del usuario ID: {} a: {}", id, estadoRequest.getEstado());
+            logger.info("✏️ Actualizando usuario ID: {} - cédula: {}", id, usuarioDTO.getCedula());
             
-            Usuario usuarioActualizado = cambiarEstadoUsuarioUseCase.ejecutar(id, estadoRequest.getEstado());
+            UsuarioResponseDTO usuarioActualizado = usuarioService.actualizarUsuarioConDTO(id, usuarioDTO);
             
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Estado del usuario cambiado exitosamente");
-            response.put("data", convertirUsuarioAMap(usuarioActualizado));
+            return ResponseEntity.ok(crearRespuestaExitosa(
+                "Usuario actualizado exitosamente", 
+                usuarioActualizado, 
+                null
+            ));
             
-            return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
-            logger.warn("Error de validación al cambiar estado: {}", e.getMessage());
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+            logger.warn("⚠️ Error de validación en actualización: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(crearRespuestaError(e.getMessage()));
+                
         } catch (Exception e) {
-            logger.error("Error al cambiar estado del usuario: ", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Error interno del servidor");
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+            logger.error("❌ Error interno al actualizar usuario: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(crearRespuestaError("Error interno del servidor"));
         }
     }
     
     /**
-     * Eliminar usuario usando caso de uso
-     * DELETE /api/usuarios/{id}
+     * 🗑️ DELETE /usuarios/{id} - Eliminar usuario
+     * 🎯 Eliminación por ID con validación de existencia
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> eliminarUsuario(@PathVariable Long id) {
         try {
-            logger.info("Eliminando usuario con ID: {} usando caso de uso", id);
+            logger.info("🗑️ Eliminando usuario ID: {}", id);
             
-            eliminarUsuarioUseCase.ejecutar(id);
+            // Verificar que existe antes de eliminar
+            Optional<Usuario> usuario = usuarioService.obtenerUsuarioPorId(id);
+            if (usuario.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(crearRespuestaError("Usuario no encontrado con ID: " + id));
+            }
             
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Usuario eliminado exitosamente");
-            response.put("timestamp", LocalDate.now().toString());
-            response.put("usuarioId", id);
+            usuarioService.eliminarUsuario(id);
             
-            logger.info("Usuario eliminado exitosamente: {}", id);
-            return ResponseEntity.ok(response);
-            
-        } catch (IllegalArgumentException e) {
-            logger.error("Error de validación al eliminar usuario {}: {}", id, e.getMessage());
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", e.getMessage());
-            response.put("timestamp", LocalDate.now().toString());
-            response.put("usuarioId", id);
-            
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.ok(crearRespuestaExitosa(
+                "Usuario eliminado exitosamente", 
+                null, 
+                null
+            ));
             
         } catch (Exception e) {
-            logger.error("Error interno al eliminar usuario {}: {}", id, e.getMessage());
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Error interno del servidor");
-            response.put("timestamp", LocalDate.now().toString());
-            response.put("usuarioId", id);
-            
-            return ResponseEntity.status(500).body(response);
+            logger.error("❌ Error al eliminar usuario: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(crearRespuestaError("Error interno del servidor"));
         }
     }
     
     /**
-     * Convierte un objeto Usuario a un Map para la respuesta JSON
+     * 🔄 PUT /usuarios/{id}/estado - Cambiar estado del usuario
+     * 🎯 Activar/Inactivar usuarios
      */
-    private Map<String, Object> convertirUsuarioAMap(Usuario usuario) {
-        Map<String, Object> usuarioMap = new HashMap<>();
-        usuarioMap.put("id", usuario.getId());
-        usuarioMap.put("nombres", usuario.getNombres());
-        usuarioMap.put("apellidos", usuario.getApellidos());
-        usuarioMap.put("nombreCompleto", usuario.getNombreCompleto());
-        usuarioMap.put("fechaNacimiento", usuario.getFechaNacimiento());
-        usuarioMap.put("cedula", usuario.getCedula());
-        usuarioMap.put("genero", usuario.getGenero() != null ? usuario.getGenero().toString() : null);
-        usuarioMap.put("email", usuario.getEmail());
-        usuarioMap.put("celular", usuario.getCelular());
-        usuarioMap.put("direccion", usuario.getDireccion());
-        usuarioMap.put("contactoEmergencia", usuario.getContactoEmergencia());
-        usuarioMap.put("tipo", usuario.getTipo() != null ? usuario.getTipo().toString() : null);
-        usuarioMap.put("estado", usuario.getEstado() != null ? usuario.getEstado().toString() : null);
-        usuarioMap.put("fechaRegistro", usuario.getFechaRegistro());
-        usuarioMap.put("createdAt", usuario.getCreatedAt());
-        usuarioMap.put("updatedAt", usuario.getUpdatedAt());
-        return usuarioMap;
-    }
-    
-    // Clases auxiliares para requests y responses
-    public static class EstadoRequest {
-        private Usuario.EstadoUsuario estado;
-        
-        public Usuario.EstadoUsuario getEstado() { return estado; }
-        public void setEstado(Usuario.EstadoUsuario estado) { this.estado = estado; }
-    }
-    
-    // Clases para respuestas (mantenidas para compatibilidad)
-    public static class ErrorResponse {
-        private String message;
-        private String type = "error";
-        
-        public ErrorResponse(String message) {
-            this.message = message;
+    @PutMapping("/{id}/estado")
+    public ResponseEntity<Map<String, Object>> cambiarEstadoUsuario(
+            @PathVariable Long id, 
+            @RequestBody Map<String, String> estadoRequest) {
+        try {
+            String nuevoEstado = estadoRequest.get("estado");
+            logger.info("🔄 Cambiando estado usuario ID: {} a {}", id, nuevoEstado);
+            
+            Usuario.EstadoUsuario estadoEnum = Usuario.EstadoUsuario.valueOf(nuevoEstado);
+            Usuario usuarioActualizado = usuarioService.cambiarEstadoUsuario(id, estadoEnum);
+            
+            return ResponseEntity.ok(crearRespuestaExitosa(
+                "Estado actualizado exitosamente", 
+                usuarioActualizado, 
+                null
+            ));
+            
+        } catch (IllegalArgumentException e) {
+            logger.warn("⚠️ Estado inválido: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(crearRespuestaError("Estado inválido. Use: Activo o Inactivo"));
+                
+        } catch (Exception e) {
+            logger.error("❌ Error al cambiar estado: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(crearRespuestaError("Error interno del servidor"));
         }
-        
-        public String getMessage() { return message; }
-        public String getType() { return type; }
     }
     
-    public static class SuccessResponse {
-        private String message;
-        private String type = "success";
-        
-        public SuccessResponse(String message) {
-            this.message = message;
+    /**
+     * 📊 GET /usuarios/estadisticas - Obtener estadísticas de usuarios
+     */
+    @GetMapping("/estadisticas")
+    public ResponseEntity<Map<String, Object>> obtenerEstadisticas() {
+        try {
+            logger.info("📊 Obteniendo estadísticas de usuarios");
+            
+            Map<String, Object> estadisticas = usuarioService.obtenerEstadisticasUsuarios();
+            
+            return ResponseEntity.ok(crearRespuestaExitosa(
+                "Estadísticas obtenidas exitosamente", 
+                estadisticas, 
+                null
+            ));
+            
+        } catch (Exception e) {
+            logger.error("❌ Error al obtener estadísticas: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(crearRespuestaError("Error interno del servidor"));
         }
-        
-        public String getMessage() { return message; }
-        public String getType() { return type; }
+    }
+    
+    /**
+     * 🔍 GET /usuarios/buscar - Búsquedas avanzadas
+     */
+    @GetMapping("/buscar")
+    public ResponseEntity<Map<String, Object>> buscarUsuarios(
+            @RequestParam(required = false) String nombre,
+            @RequestParam(required = false) String apellido,
+            @RequestParam(required = false) String cedula,
+            @RequestParam(required = false) String email) {
+        try {
+            logger.info("🔍 Búsqueda avanzada - nombre: {}, apellido: {}, cedula: {}, email: {}", 
+                nombre, apellido, cedula, email);
+            
+            List<Usuario> resultados = new ArrayList<>();
+            
+            if (cedula != null && !cedula.trim().isEmpty()) {
+                usuarioService.obtenerUsuarioPorCedula(cedula).ifPresent(resultados::add);
+            } else if (email != null && !email.trim().isEmpty()) {
+                usuarioService.obtenerUsuarioPorEmail(email).ifPresent(resultados::add);
+            } else if (nombre != null && !nombre.trim().isEmpty()) {
+                resultados = usuarioService.buscarUsuariosPorNombres(nombre);
+            } else if (apellido != null && !apellido.trim().isEmpty()) {
+                resultados = usuarioService.buscarUsuariosPorApellidos(apellido);
+            }
+            
+            return ResponseEntity.ok(crearRespuestaExitosa(
+                "Búsqueda completada", 
+                resultados, 
+                resultados.size()
+            ));
+            
+        } catch (Exception e) {
+            logger.error("❌ Error en búsqueda: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(crearRespuestaError("Error interno del servidor"));
+        }
+    }
+    
+    // 🛠️ Métodos auxiliares para respuestas
+    private Map<String, Object> crearRespuestaExitosa(String mensaje, Object data, Integer total) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", mensaje);
+        response.put("timestamp", LocalDateTime.now());
+        if (data != null) {
+            response.put("data", data);
+        }
+        if (total != null) {
+            response.put("total", total);
+        }
+        return response;
+    }
+    
+    private Map<String, Object> crearRespuestaError(String mensaje) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", false);
+        response.put("message", mensaje);
+        response.put("timestamp", LocalDateTime.now());
+        return response;
     }
 }

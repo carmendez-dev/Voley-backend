@@ -45,18 +45,33 @@ public interface UsuarioRepositoryPort {
     List<Usuario> findAll();
     
     /**
-     * Busca usuarios por tipo (jugador/profesor)
-     * tipo el tipo de usuario
-     * lista de usuarios del tipo especificado
-     */
-    List<Usuario> findByTipo(Usuario.TipoUsuario tipo);
-    
-    /**
      * Busca usuarios por estado (Activo/Inactivo)
      * estado el estado del usuario
      * lista de usuarios con el estado especificado
      */
     List<Usuario> findByEstado(Usuario.EstadoUsuario estado);
+    
+    /**
+     * Busca usuarios por rango de peso
+     */
+    List<Usuario> findByPesoBetween(Float pesoMin, Float pesoMax);
+    
+    /**
+     * Busca usuarios por rango de altura
+     */
+    List<Usuario> findByAlturaBetween(Float alturaMin, Float alturaMax);
+    
+    /**
+     * Busca usuarios por nombre (cualquiera de los tres nombres)
+     */
+    List<Usuario> findByPrimerNombreContainingIgnoreCaseOrSegundoNombreContainingIgnoreCaseOrTercerNombreContainingIgnoreCase(
+        String primerNombre, String segundoNombre, String tercerNombre);
+    
+    /**
+     * Busca usuarios por apellido (cualquiera de los dos apellidos)
+     */
+    List<Usuario> findByPrimerApellidoContainingIgnoreCaseOrSegundoApellidoContainingIgnoreCase(
+        String primerApellido, String segundoApellido);
     
     /**
      * Elimina un usuario por su ID

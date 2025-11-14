@@ -1,7 +1,6 @@
 package com.voley.application.equipos;
 
 import com.voley.repository.EquipoRepository;
-import com.voley.repository.CategoriaEquipoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -9,7 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Caso de uso para eliminar un equipo
  * 
- * Elimina un equipo del sistema y todas sus relaciones con categorías.
+ * Elimina un equipo del sistema.
  * 
  * @author Sistema Voley
  * @version 1.0
@@ -19,13 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class EliminarEquipoUseCase {
     
     private final EquipoRepository equipoRepository;
-    private final CategoriaEquipoRepository categoriaEquipoRepository;
     
     @Autowired
-    public EliminarEquipoUseCase(EquipoRepository equipoRepository, 
-                                CategoriaEquipoRepository categoriaEquipoRepository) {
+    public EliminarEquipoUseCase(EquipoRepository equipoRepository) {
         this.equipoRepository = equipoRepository;
-        this.categoriaEquipoRepository = categoriaEquipoRepository;
     }
     
     /**
@@ -44,9 +40,6 @@ public class EliminarEquipoUseCase {
         if (!equipoRepository.existePorId(id)) {
             throw new RuntimeException("No existe equipo con ID: " + id);
         }
-        
-        // Eliminar todas las relaciones del equipo con categorías
-        categoriaEquipoRepository.eliminarTodasRelacionesEquipo(id);
         
         // Eliminar el equipo
         equipoRepository.eliminar(id);

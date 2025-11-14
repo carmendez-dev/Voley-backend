@@ -88,4 +88,14 @@ public class CategoriaJpaAdapter implements CategoriaRepository {
     public long contarPorGenero(GeneroCategoria genero) {
         return jpaRepository.countByGenero(genero);
     }
+    
+    @Override
+    public boolean existePorNombreYGenero(String nombre, GeneroCategoria genero) {
+        return jpaRepository.existsByNombreAndGenero(nombre, genero);
+    }
+    
+    @Override
+    public boolean existePorNombreYGenero(String nombre, GeneroCategoria genero, Long idExcluir) {
+        return jpaRepository.existsByNombreAndGeneroAndIdNot(nombre, genero, idExcluir);
+    }
 }

@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(scanBasePackages = "com.voley")
-@EnableJpaRepositories(basePackages = "com.voley.adapter")
+@EnableJpaRepositories(basePackages = {"com.voley.adapter", "com.voley.repository"})
 @EntityScan(basePackages = "com.voley.domain")
 @EnableScheduling
 public class VoleyBackendApplication {

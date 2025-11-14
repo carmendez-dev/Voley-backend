@@ -19,10 +19,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/upload")
-@CrossOrigin(originPatterns = {"http://localhost:*", "http://127.0.0.1:*"}, 
-             allowedHeaders = {"Origin", "Content-Type", "Accept", "Authorization", 
-                              "Access-Control-Request-Method", "Access-Control-Request-Headers"},
-             allowCredentials = "true")
 public class UploadController {
     
     private static final Logger logger = LoggerFactory.getLogger(UploadController.class);

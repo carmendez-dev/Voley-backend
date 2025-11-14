@@ -76,4 +76,14 @@ public interface CategoriaRepository {
      * Cuenta categorías por género
      */
     long contarPorGenero(GeneroCategoria genero);
+    
+    /**
+     * Verifica si existe una categoría con el mismo nombre y género
+     */
+    boolean existePorNombreYGenero(String nombre, GeneroCategoria genero);
+    
+    /**
+     * Verifica si existe una categoría con el mismo nombre y género (excluyendo una específica)
+     */
+    boolean existePorNombreYGenero(String nombre, GeneroCategoria genero, Long idExcluir);
 }

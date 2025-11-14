@@ -69,4 +69,16 @@ public interface CategoriaJpaRepository extends JpaRepository<Categoria, Long> {
      */
     @Query("SELECT c.genero, COUNT(c) FROM Categoria c GROUP BY c.genero")
     List<Object[]> getEstadisticasPorGenero();
+    
+    /**
+     * Verifica si existe una categoría con el mismo nombre y género
+     */
+    @Query("SELECT COUNT(c) > 0 FROM Categoria c WHERE LOWER(c.nombre) = LOWER(:nombre) AND c.genero = :genero")
+    boolean existsByNombreAndGenero(@Param("nombre") String nombre, @Param("genero") GeneroCategoria genero);
+    
+    /**
+     * Verifica si existe una categoría con el mismo nombre y género (excluyendo una específica)
+     */
+    @Query("SELECT COUNT(c) > 0 FROM Categoria c WHERE LOWER(c.nombre) = LOWER(:nombre) AND c.genero = :genero AND c.idCategoria != :id")
+    boolean existsByNombreAndGeneroAndIdNot(@Param("nombre") String nombre, @Param("genero") GeneroCategoria genero, @Param("id") Long id);
 }

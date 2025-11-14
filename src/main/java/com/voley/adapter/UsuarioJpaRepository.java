@@ -28,18 +28,33 @@ public interface UsuarioJpaRepository extends JpaRepository<Usuario, Long> {
     Optional<Usuario> findByEmail(String email);
     
     /**
-     * Busca usuarios por tipo
-     * @param tipo el tipo de usuario
-     * @return lista de usuarios del tipo especificado
-     */
-    List<Usuario> findByTipo(Usuario.TipoUsuario tipo);
-    
-    /**
      * Busca usuarios por estado
      * @param estado el estado del usuario
      * @return lista de usuarios con el estado especificado
      */
     List<Usuario> findByEstado(Usuario.EstadoUsuario estado);
+    
+    /**
+     * Busca usuarios por rango de peso
+     */
+    List<Usuario> findByPesoBetween(Float pesoMin, Float pesoMax);
+    
+    /**
+     * Busca usuarios por rango de altura
+     */
+    List<Usuario> findByAlturaBetween(Float alturaMin, Float alturaMax);
+    
+    /**
+     * Busca usuarios por nombre (cualquiera de los tres nombres)
+     */
+    List<Usuario> findByPrimerNombreContainingIgnoreCaseOrSegundoNombreContainingIgnoreCaseOrTercerNombreContainingIgnoreCase(
+        String primerNombre, String segundoNombre, String tercerNombre);
+    
+    /**
+     * Busca usuarios por apellido (cualquiera de los dos apellidos)
+     */
+    List<Usuario> findByPrimerApellidoContainingIgnoreCaseOrSegundoApellidoContainingIgnoreCase(
+        String primerApellido, String segundoApellido);
     
     /**
      * Verifica si existe un usuario con la cédula especificada

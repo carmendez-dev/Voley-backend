@@ -6,6 +6,7 @@ package com.voley.dto;
  */
 public class CategoriaBasicaDTO {
     
+    private Long idTorneoCategoria;  // ID de la relación torneo_categoria
     private Long idCategoria;
     private String nombre;
     private Long idTorneo;
@@ -26,7 +27,23 @@ public class CategoriaBasicaDTO {
         this.nombreTorneo = nombreTorneo;
     }
     
+    public CategoriaBasicaDTO(Long idTorneoCategoria, Long idCategoria, String nombre, Long idTorneo, String nombreTorneo) {
+        this.idTorneoCategoria = idTorneoCategoria;
+        this.idCategoria = idCategoria;
+        this.nombre = nombre;
+        this.idTorneo = idTorneo;
+        this.nombreTorneo = nombreTorneo;
+    }
+    
     // Getters y Setters
+    public Long getIdTorneoCategoria() {
+        return idTorneoCategoria;
+    }
+    
+    public void setIdTorneoCategoria(Long idTorneoCategoria) {
+        this.idTorneoCategoria = idTorneoCategoria;
+    }
+    
     public Long getIdCategoria() {
         return idCategoria;
     }
@@ -62,7 +79,8 @@ public class CategoriaBasicaDTO {
     @Override
     public String toString() {
         return "CategoriaBasicaDTO{" +
-                "idCategoria=" + idCategoria +
+                "idTorneoCategoria=" + idTorneoCategoria +
+                ", idCategoria=" + idCategoria +
                 ", nombre='" + nombre + '\'' +
                 ", idTorneo=" + idTorneo +
                 ", nombreTorneo='" + nombreTorneo + '\'' +

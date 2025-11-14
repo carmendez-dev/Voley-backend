@@ -1,7 +1,6 @@
 package com.voley.controller;
 
 import com.voley.domain.Equipo;
-import com.voley.domain.CategoriaEquipo;
 import com.voley.service.EquipoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -14,22 +13,13 @@ import java.util.Map;
 /**
  * Controlador REST para operaciones con Equipos
  * 
- * Expone endpoints para el CRUD de equipos y la gestión de
- * relaciones categoría-equipo según los requerimientos:
- * 
- * - CRUD completo de Equipo (/equipos)
- * - POST /categorias/{id}/equipos/{idEquipo} → asignar equipo
- * - GET /categorias/{id}/equipos → listar equipos de esa categoría
+ * Expone endpoints para el CRUD de equipos.
  * 
  * @author Sistema Voley
  * @version 1.0
  */
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(originPatterns = {"http://localhost:*", "http://127.0.0.1:*"}, 
-             allowedHeaders = {"Origin", "Content-Type", "Accept", "Authorization", 
-                              "Access-Control-Request-Method", "Access-Control-Request-Headers"},
-             allowCredentials = "true")
 public class EquipoUseCaseController {
     
     private final EquipoService equipoService;
@@ -137,74 +127,6 @@ public class EquipoUseCaseController {
     
     // ===== ENDPOINTS PARA RELACIONES CATEGORIA-EQUIPO =====
     
-    /**
-     * POST /api/categorias/{id}/equipos/{idEquipo} - Asignar equipo a categoría
-     */
-    @PostMapping("/categorias/{id}/equipos/{idEquipo}")
-    public ResponseEntity<Map<String, String>> asignarEquipoACategoria(@PathVariable Long id, @PathVariable Long idEquipo) {
-        try {
-            equipoService.asignarEquipoACategoria(id, idEquipo);
-            return ResponseEntity.ok(Map.of("message", "Equipo asignado exitosamente a la categoría"));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error interno del servidor"));
-        }
-    }
-    
-    /**
-     * GET /api/categorias/{id}/equipos - Obtener equipos de una categoría
-     */
-    @GetMapping("/categorias/{id}/equipos")
-    public ResponseEntity<List<EquipoBasicoDTO>> obtenerEquiposPorCategoria(@PathVariable Long id) {
-        try {
-            List<CategoriaEquipo> relaciones = equipoService.obtenerEquiposPorCategoria(id);
-            
-            // Convertir a DTO básico con información del equipo y categoría
-            List<EquipoBasicoDTO> equiposDTO = relaciones.stream()
-                    .map(rel -> new EquipoBasicoDTO(
-                            rel.getEquipo().getIdEquipo(),
-                            rel.getEquipo().getNombre(),
-                            rel.getEquipo().getDescripcion(),
-                            rel.getCategoria().getIdCategoria(),
-                            rel.getCategoria().getNombre()
-                    ))
-                    .toList();
-            
-            return ResponseEntity.ok(equiposDTO);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-    
-    /**
-     * DELETE /api/categorias/{id}/equipos/{idEquipo} - Desasignar equipo de categoría
-     */
-    @DeleteMapping("/categorias/{id}/equipos/{idEquipo}")
-    public ResponseEntity<Map<String, String>> desasignarEquipoDeCategoria(@PathVariable Long id, @PathVariable Long idEquipo) {
-        try {
-            equipoService.desasignarEquipoDeCategoria(id, idEquipo);
-            return ResponseEntity.ok(Map.of("message", "Equipo desasignado exitosamente de la categoría"));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound()
-                    .build();
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error interno del servidor"));
-        }
-    }
     
     // ===== CLASES INTERNAS PARA REQUEST/RESPONSE =====
     
